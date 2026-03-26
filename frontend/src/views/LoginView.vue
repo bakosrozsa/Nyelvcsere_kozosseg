@@ -1,34 +1,33 @@
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios' // Ezt be kell importálnunk a kérésekhez!
+import axios from 'axios'
+import { useRouter } from 'vue-router'
 
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 
+const router = useRouter()
+
 const handleLogin = async () => {
     errorMessage.value = ''
     loading.value = true
 
     try {
-        // 1. Összerakjuk az adatokat OAuth2 formátumba (mert a FastAPI ezt várja)
         const formData = new URLSearchParams()
         formData.append('username', email.value)
         formData.append('password', password.value)
 
-        // 2. Elküldjük a POST kérést a backendnek
         const response = await axios.post('http://127.0.0.1:8000/login', formData)
 
-        // 3. Ha sikeres (200 OK), a backend küld egy tokent. Ezt elmentjük a böngészőbe!
         const token = response.data.access_token
         localStorage.setItem('token', token)
         
         console.log('Sikeres bejelentkezés, token elmentve!')
-        // IDE JÖN MAJD A TOVÁBBIRÁNYÍTÁS (pl. router.push('/dashboard'))
+        router.push('/dashboard')
 
     } catch (error) {
-        // Ha hibát kapunk (pl. 401 Unauthorized), szólunk a felhasználónak
         if (error.response && error.response.status === 401) {
             errorMessage.value = 'Hibás email vagy jelszó!'
         } else {
@@ -110,6 +109,10 @@ const handleLogin = async () => {
                 </button>
 
             </form>
+
+            <div class="switch-page" style="margin-top: 20px; text-align: center; font-size: 0.9rem;">
+                <p>Nincs még fiókod? <a href="#" @click.prevent="$router.push('/register')" style="color: #1f67c8; font-weight: 600; text-decoration: none;">Regisztrálj itt!</a></p>
+            </div>
 
         </section>
 
