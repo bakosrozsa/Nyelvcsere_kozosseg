@@ -14,12 +14,14 @@ const fetchCurrentUser = async () => {
   error.value = ''
 
   try {
-    const token = localStorage.getItem('access_token')
+    // 1. JAVÍTÁS: 'access_token' helyett 'token'
+    const token = localStorage.getItem('token')
     if (!token) {
       throw new Error('Nincs token. Kérjük, jelentkezzen be.')
     }
 
-    const response = await fetch(`${API_BASE_URL}/users/1`, {
+    // 2. JAVÍTÁS: A fix '/users/1' helyett a dinamikus '/users/me' végpontot hívjuk!
+    const response = await fetch(`${API_BASE_URL}/users/me`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,

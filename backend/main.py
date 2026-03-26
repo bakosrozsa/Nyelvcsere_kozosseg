@@ -194,6 +194,10 @@ def list_users(
 ) -> List[User]:
     return db.query(User).offset(skip).limit(limit).all()
 
+@app.get("/users/me", response_model=UserOut)
+def read_current_user(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
+
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> User:
     user = db.query(User).filter(User.id == user_id).first()
