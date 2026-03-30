@@ -4,10 +4,19 @@
       <h1>Nyelvcsere Közösség</h1>
       <nav>
         <router-link to="/">Kezdőoldal</router-link>
-        <router-link to="/dashboard">Felhasználók</router-link>
         <router-link to="/mentors">Mentorok</router-link>
-        <router-link to="/profile">Profil</router-link>
-        <router-link to="/login">Kijelentkezés</router-link>
+
+        <template v-if="isAuthenticated">
+          <router-link to="/dashboard">Felhasználók</router-link>
+          <router-link to="/sessions">Foglalkozások</router-link>
+          <router-link to="/profile">Profil</router-link>
+          <a href="#" class="logout-btn" @click.prevent="handleLogout">Kijelentkezés</a>
+        </template>
+
+        <template v-else>
+          <router-link to="/login">Belépés</router-link>
+          <router-link to="/register">Regisztráció</router-link>
+        </template>
       </nav>
     </header>
     <main>
@@ -17,6 +26,27 @@
 </template>
 
 <script setup>
+import { ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+
+const router = useRouter()
+const route = useRoute()
+
+const isAuthenticated = ref(false)
+
+watch(
+  () => route.path,
+  () => {
+    isAuthenticated.value = !!localStorage.getItem('token')
+  },
+  { immediate: true }
+)
+
+const handleLogout = () => {
+  localStorage.removeItem('token')
+  isAuthenticated.value = false
+  router.push('/login')
+}
 </script>
 
 <style>
@@ -43,6 +73,7 @@ h1 {
 nav {
   display: flex;
   gap: 15px;
+  align-items: center;
 }
 
 nav a {
@@ -50,6 +81,7 @@ nav a {
   color: #2f7de1;
   font-weight: 500;
   transition: color 0.2s;
+  cursor: pointer;
 }
 
 nav a:hover {
@@ -60,6 +92,13 @@ nav a.router-link-active {
   color: #1653a2;
   border-bottom: 2px solid #1653a2;
   padding-bottom: 5px;
+}
+
+.logout-btn {
+  color: #dc3545 !important;
+}
+.logout-btn:hover {
+  color: #a71d2a !important;
 }
 
 main {

@@ -35,6 +35,8 @@ SECRET_KEY = "change-this-secret-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 MAX_BCRYPT_PASSWORD_BYTES = 72
+ROLE_GUEST = "guest"
+ALLOWED_REGISTER_ROLES = {"student", "mentor"}
 
 
 class UserOut(BaseModel):
@@ -49,6 +51,13 @@ class UserRegister(BaseModel):
     email: str
     password: str
     role: str = "student"
+
+class CurrentUserOut(BaseModel):
+    is_authenticated: bool
+    role: str
+    id: Optional[int] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
 
 class TokenOut(BaseModel):
     access_token: str
@@ -138,6 +147,34 @@ def get_current_user(
     return user
 
 
+def get_current_user_or_guest(
+    token: Optional[str] = Depends(OAuth2PasswordBearer(tokenUrl="/login", auto_error=False)),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    if not token:
+        return None
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        subject = payload.get("sub")
+        if subject is None:
+            raise credentials_exception
+        user_id = int(subject)
+    except (JWTError, ValueError):
+        raise credentials_exception
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise credentials_exception
+
+    return user
+
+
 @app.get("/")
 def root() -> dict:
     return {"message": "Nyelvcsere FastAPI backend is running"}
@@ -148,6 +185,9 @@ def health() -> dict:
 
 @app.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
+    if payload.role not in ALLOWED_REGISTER_ROLES:
+        raise HTTPException(status_code=400, detail="Invalid role. Allowed roles: student, mentor")
+
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email is already registered")
@@ -185,18 +225,27 @@ def token_check(token: str = Query(..., description="JWT token to validate")) ->
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
+
 @app.get("/users", response_model=List[UserOut])
 def list_users(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ) -> List[User]:
     return db.query(User).offset(skip).limit(limit).all()
 
-@app.get("/users/me", response_model=UserOut)
-def read_current_user(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+@app.get("/users/me", response_model=CurrentUserOut)
+def read_current_user(current_user: Optional[User] = Depends(get_current_user_or_guest)) -> CurrentUserOut:
+    if current_user is None:
+        return CurrentUserOut(is_authenticated=False, role=ROLE_GUEST)
+
+    return CurrentUserOut(
+        is_authenticated=True,
+        role=current_user.role,
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+    )
 
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> User:
@@ -206,12 +255,13 @@ def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = D
     return user
 
 @app.get("/languages", response_model=List[LanguageOut])
-def list_languages(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[Language]:
+def list_languages(db: Session = Depends(get_db)) -> List[Language]:
     return db.query(Language).order_by(Language.name.asc()).all()
 
 @app.get("/mentor-profiles", response_model=List[MentorProfileOut])
-def list_mentor_profiles(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[MentorProfile]:
+def list_mentor_profiles(db: Session = Depends(get_db)) -> List[MentorProfile]:
     return db.query(MentorProfile).all()
+
 
 @app.get("/sessions", response_model=List[SessionOut])
 def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[StudySession]:
@@ -220,7 +270,6 @@ def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(ge
 @app.get("/progress-logs", response_model=List[ProgressLogOut])
 def list_progress_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[ProgressLog]:
     return db.query(ProgressLog).all()
-
 
 
 @app.post("/sessions", response_model=SessionOut, status_code=status.HTTP_201_CREATED)

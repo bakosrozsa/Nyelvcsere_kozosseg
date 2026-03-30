@@ -15,16 +15,16 @@ const fetchMentors = async () => {
   error.value = ''
 
   try {
-    // JAVÍTVA: access_token -> token
     const token = localStorage.getItem('token')
-    if (!token) {
-      router.push({ name: 'Login' })
-      return
-    }
-
+    
+    // Alap fejlécek
     const headers = {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+    }
+    
+    // CSAK akkor adjuk hozzá a tokent, ha tényleg be van jelentkezve
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
     }
 
     const [profilesRes, usersRes, languagesRes] = await Promise.all([
@@ -33,8 +33,8 @@ const fetchMentors = async () => {
       fetch(`${API_BASE_URL}/languages`, { headers }),
     ])
 
-    if (profilesRes.status === 401 || usersRes.status === 401 || languagesRes.status === 401) {
-      // JAVÍTVA: access_token -> token
+    // Ha véletlenül lejárt a tokenünk, dobjon ki, de vendégként nem lesz 401-es hibánk!
+    if (token && (profilesRes.status === 401 || usersRes.status === 401 || languagesRes.status === 401)) {
       localStorage.removeItem('token')
       router.push({ name: 'Login' })
       return

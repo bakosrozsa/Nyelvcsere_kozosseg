@@ -6,7 +6,7 @@ const routes = [
     path: '/',
     name: 'Home',
     component: () => import('../views/HomeView.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: false } // JAVÍTVA: A Kezdőoldalt is láthatják a vendégek!
   },
   {
     path: '/dashboard',
@@ -36,7 +36,7 @@ const routes = [
     path: '/mentors',
     name: 'Mentors',
     component: () => import('../views/MentorsView.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: false } // JAVÍTVA: A Mentorok oldalt is láthatják a vendégek!
   },
   {
     path: '/sessions',
@@ -57,22 +57,17 @@ const router = createRouter({
   routes
 })
 
-// Global navigation guard for authentication (Vue 3 szabványra javítva)
 router.beforeEach((to, from) => {
-  // Megnézzük, van-e 'token' elmentve a böngészőben
   const isAuthenticated = !!localStorage.getItem('token')
 
-  // 1. Ha védett oldalra próbál menni, de nincs bejelentkezve -> Login
   if (to.meta.requiresAuth && !isAuthenticated) {
     return { name: 'Login', query: { redirect: to.fullPath } }
   } 
   
-  // 2. Ha már bejelentkezett, de a Login vagy Register oldalra tévedne -> Dashboard
   if ((to.name === 'Login' || to.name === 'Register') && isAuthenticated) {
     return { name: 'Dashboard' }
   } 
   
-  // 3. Minden más esetben engedjük tovább az eredeti útvonalra
   return true
 })
 
