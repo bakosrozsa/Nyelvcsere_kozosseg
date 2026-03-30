@@ -1,8 +1,8 @@
 <template>
   <div id="app">
-    <header>
-      <h1>Nyelvcsere Közösség</h1>
-      <nav>
+    <header class="app-header">
+      <h1 class="app-title">Nyelvcsere Közösség</h1>
+      <nav class="app-nav">
         <router-link to="/">Kezdőoldal</router-link>
         <router-link to="/mentors">Mentorok</router-link>
 
@@ -56,39 +56,45 @@ const handleLogout = () => {
   padding: 20px;
 }
 
-header {
+.app-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
   margin-bottom: 20px;
   border-bottom: 2px solid #e0e0e0;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
 }
 
-h1 {
+.app-title {
   margin: 0;
   color: #2c3e50;
+  font-size: clamp(1.2rem, 2.4vw, 1.8rem);
 }
 
-nav {
+.app-nav {
   display: flex;
   gap: 15px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-nav a {
+.app-nav a {
   text-decoration: none;
   color: #2f7de1;
   font-weight: 500;
   transition: color 0.2s;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-nav a:hover {
+.app-nav a:hover {
   color: #1653a2;
 }
 
-nav a.router-link-active {
+.app-nav a.router-link-active {
   color: #1653a2;
   border-bottom: 2px solid #1653a2;
   padding-bottom: 5px;
@@ -103,5 +109,29 @@ nav a.router-link-active {
 
 main {
   min-height: 70vh;
+}
+
+@media (max-width: 820px) {
+  #app {
+    padding: 14px;
+  }
+
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .app-nav {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 10px 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-nav a {
+    padding: 6px 0;
+    font-size: 0.95rem;
+  }
 }
 </style>
