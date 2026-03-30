@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -8,8 +8,25 @@ const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const role = ref('student')
+const offeredLanguageId = ref('')
+const requestedLanguageId = ref('')
+const languages = ref([])
 const loading = ref(false)
 const error = ref('')
+
+const API_BASE_URL = 'http://127.0.0.1:8000'
+
+const fetchLanguages = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/languages`)
+    if (!response.ok) {
+      throw new Error('Nem sikerult a nyelveket betolteni.')
+    }
+    languages.value = await response.json()
+  } catch (err) {
+    error.value = err?.message || 'Hiba tortent a nyelvek lekerese soran.'
+  }
+}
 
 const handleRegister = async () => {
   error.value = ''
@@ -22,17 +39,24 @@ const handleRegister = async () => {
   loading.value = true
 
   try {
-    const response = await fetch('http://127.0.0.1:8000/register', {
+    const payload = {
+      name: name.value,
+      email: email.value,
+      password: password.value,
+      role: role.value,
+    }
+
+    if (role.value === 'mentor') {
+      payload.offered_language_id = offeredLanguageId.value ? Number(offeredLanguageId.value) : null
+      payload.requested_language_id = requestedLanguageId.value ? Number(requestedLanguageId.value) : null
+    }
+
+    const response = await fetch(`${API_BASE_URL}/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name: name.value,
-        email: email.value,
-        password: password.value,
-        role: role.value,
-      }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
@@ -47,6 +71,8 @@ const handleRegister = async () => {
     loading.value = false
   }
 }
+
+onMounted(fetchLanguages)
 </script>
 
 <template>
@@ -81,6 +107,24 @@ const handleRegister = async () => {
           <option value="student">Diák</option>
           <option value="mentor">Mentor</option>
         </select>
+
+        <template v-if="role === 'mentor'">
+          <label class="label" for="offeredLanguage">Tanított nyelv</label>
+          <select id="offeredLanguage" v-model="offeredLanguageId" class="input">
+            <option value="">Valassz nyelvet</option>
+            <option v-for="language in languages" :key="language.id" :value="language.id">
+              {{ language.name }}
+            </option>
+          </select>
+
+          <label class="label" for="requestedLanguage">Tanulni vágyott nyelv</label>
+          <select id="requestedLanguage" v-model="requestedLanguageId" class="input">
+            <option value="">Valassz nyelvet</option>
+            <option v-for="language in languages" :key="`requested-${language.id}`" :value="language.id">
+              {{ language.name }}
+            </option>
+          </select>
+        </template>
 
         <label class="label" for="password">Jelszó</label>
         <input

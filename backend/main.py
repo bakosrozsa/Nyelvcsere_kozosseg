@@ -51,6 +51,8 @@ class UserRegister(BaseModel):
     email: str
     password: str
     role: str = "student"
+    offered_language_id: Optional[int] = None
+    requested_language_id: Optional[int] = None
 
 class CurrentUserOut(BaseModel):
     is_authenticated: bool
@@ -75,6 +77,19 @@ class MentorProfileOut(BaseModel):
     offered_language_id: Optional[int]
     requested_language_id: Optional[int]
     session_length_minutes: int
+
+class MentorProfileMeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    offered_language_id: Optional[int]
+    requested_language_id: Optional[int]
+    session_length_minutes: int
+
+class MentorProfileUpdate(BaseModel):
+    offered_language_id: Optional[int] = None
+    requested_language_id: Optional[int] = None
+    session_length_minutes: Optional[int] = None
 
 class SessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -192,6 +207,21 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
     if existing_user:
         raise HTTPException(status_code=400, detail="Email is already registered")
 
+    if payload.role != "mentor" and (
+        payload.offered_language_id is not None or payload.requested_language_id is not None
+    ):
+        raise HTTPException(status_code=400, detail="Language preferences are only allowed for mentor role")
+
+    if payload.offered_language_id is not None:
+        offered_language = db.query(Language).filter(Language.id == payload.offered_language_id).first()
+        if not offered_language:
+            raise HTTPException(status_code=400, detail="Invalid offered_language_id")
+
+    if payload.requested_language_id is not None:
+        requested_language = db.query(Language).filter(Language.id == payload.requested_language_id).first()
+        if not requested_language:
+            raise HTTPException(status_code=400, detail="Invalid requested_language_id")
+
     normalized_password = truncate_password_for_bcrypt(payload.password)
     hashed_password = pwd_context.hash(normalized_password)
     user = User(
@@ -200,10 +230,25 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
         hashed_password=hashed_password,
         role=payload.role,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    try:
+        db.add(user)
+        db.flush()
+
+        if payload.role == "mentor":
+            mentor_profile = MentorProfile(
+                user_id=user.id,
+                offered_language_id=payload.offered_language_id,
+                requested_language_id=payload.requested_language_id,
+                session_length_minutes=60,
+            )
+            db.add(mentor_profile)
+
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception:
+        db.rollback()
+        raise
 
 @app.post("/login", response_model=TokenOut)
 def login(payload: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> TokenOut:
@@ -261,6 +306,70 @@ def list_languages(db: Session = Depends(get_db)) -> List[Language]:
 @app.get("/mentor-profiles", response_model=List[MentorProfileOut])
 def list_mentor_profiles(db: Session = Depends(get_db)) -> List[MentorProfile]:
     return db.query(MentorProfile).all()
+
+
+@app.get("/mentor-profile/me", response_model=MentorProfileMeOut)
+def get_my_mentor_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MentorProfile:
+    if current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Only mentors can access mentor profile settings")
+
+    mentor_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
+    if mentor_profile is None:
+        mentor_profile = MentorProfile(
+            user_id=current_user.id,
+            offered_language_id=None,
+            requested_language_id=None,
+            session_length_minutes=60,
+        )
+        db.add(mentor_profile)
+        db.commit()
+        db.refresh(mentor_profile)
+    return mentor_profile
+
+
+@app.put("/mentor-profile/me", response_model=MentorProfileMeOut)
+def update_my_mentor_profile(
+    payload: MentorProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MentorProfile:
+    if current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Only mentors can update mentor profile settings")
+
+    mentor_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
+    if mentor_profile is None:
+        mentor_profile = MentorProfile(
+            user_id=current_user.id,
+            offered_language_id=None,
+            requested_language_id=None,
+            session_length_minutes=60,
+        )
+        db.add(mentor_profile)
+        db.flush()
+
+    if payload.offered_language_id is not None:
+        offered_language = db.query(Language).filter(Language.id == payload.offered_language_id).first()
+        if not offered_language:
+            raise HTTPException(status_code=400, detail="Invalid offered_language_id")
+        mentor_profile.offered_language_id = payload.offered_language_id
+
+    if payload.requested_language_id is not None:
+        requested_language = db.query(Language).filter(Language.id == payload.requested_language_id).first()
+        if not requested_language:
+            raise HTTPException(status_code=400, detail="Invalid requested_language_id")
+        mentor_profile.requested_language_id = payload.requested_language_id
+
+    if payload.session_length_minutes is not None:
+        if payload.session_length_minutes < 15 or payload.session_length_minutes > 240:
+            raise HTTPException(status_code=400, detail="session_length_minutes must be between 15 and 240")
+        mentor_profile.session_length_minutes = payload.session_length_minutes
+
+    db.commit()
+    db.refresh(mentor_profile)
+    return mentor_profile
 
 
 @app.get("/sessions", response_model=List[SessionOut])
