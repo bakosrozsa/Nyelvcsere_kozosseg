@@ -1,17 +1,37 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import axios from 'axios'
 
 const API_BASE_URL = 'http://127.0.0.1:8000'
 const sessions = ref([])
+const mentors = ref([])
 const loading = ref(false)
 const error = ref('')
+const minDateTime = ref('')
 
 // Űrlap adatai az új foglaláshoz (Create)
 const newSession = ref({
-  mentor_profile_id: 1, // Alapértelmezett ID, ezt később lehetne dinamikussá tenni
+  mentor_profile_id: '',
   scheduled_time: ''
 })
+
+const mentorByProfileId = computed(() => {
+  const map = new Map()
+  mentors.value.forEach((mentor) => {
+    map.set(String(mentor.id), mentor)
+  })
+  return map
+})
+
+const getCurrentDateTimeLocal = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
 
 // Biztonságos Axios hívásokhoz a fejléc (token)
 const getHeaders = () => {
@@ -34,14 +54,56 @@ const fetchSessions = async () => {
   }
 }
 
+const fetchMentors = async () => {
+  error.value = ''
+  try {
+    const headers = getHeaders()
+    const [profilesRes, usersRes, languagesRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/mentor-profiles`, { headers }),
+      axios.get(`${API_BASE_URL}/users`, { headers }),
+      axios.get(`${API_BASE_URL}/languages`, { headers }),
+    ])
+
+    const usersById = new Map(usersRes.data.map((u) => [u.id, u]))
+    const languagesById = new Map(languagesRes.data.map((l) => [l.id, l]))
+
+    mentors.value = profilesRes.data
+      .map((profile) => {
+        const user = usersById.get(profile.user_id)
+        if (!user) return null
+        return {
+          id: profile.id,
+          name: user.name,
+          email: user.email,
+          teachesLanguage: languagesById.get(profile.offered_language_id)?.name || 'Nincs megadva',
+        }
+      })
+      .filter(Boolean)
+
+    if (!newSession.value.mentor_profile_id && mentors.value.length > 0) {
+      newSession.value.mentor_profile_id = String(mentors.value[0].id)
+    }
+  } catch (err) {
+    error.value = 'Hiba a mentorok lekérésekor.'
+    console.error(err)
+  }
+}
+
 // --- 2. CREATE (Létrehozás) ---
 const createSession = async () => {
-  if (!newSession.value.scheduled_time) return
+  if (!newSession.value.scheduled_time || !newSession.value.mentor_profile_id) return
+
+  minDateTime.value = getCurrentDateTimeLocal()
+  const selectedDate = new Date(newSession.value.scheduled_time)
+  if (Number.isNaN(selectedDate.getTime()) || selectedDate.getTime() < Date.now()) {
+    alert('A jelenlegi időpontnál korábbra nem lehet foglalni.')
+    return
+  }
   
   try {
     // Formázzuk a dátumot a backendnek megfelelő ISO formátumra
     const payload = {
-      mentor_profile_id: newSession.value.mentor_profile_id,
+      mentor_profile_id: Number(newSession.value.mentor_profile_id),
       scheduled_time: new Date(newSession.value.scheduled_time).toISOString()
     }
     await axios.post(`${API_BASE_URL}/sessions`, payload, { headers: getHeaders() })
@@ -82,6 +144,8 @@ const deleteSession = async (sessionId) => {
 
 // Oldal betöltésekor egyből lekérjük az adatokat
 onMounted(() => {
+  minDateTime.value = getCurrentDateTimeLocal()
+  fetchMentors()
   fetchSessions()
 })
 </script>
@@ -96,12 +160,17 @@ onMounted(() => {
       <h3>Új időpont foglalása (Create)</h3>
       <form @submit.prevent="createSession" class="inline-form">
         <div>
-          <label>Mentor ID:</label>
-          <input type="number" v-model="newSession.mentor_profile_id" min="1" required class="input" />
+          <label>Mentor:</label>
+          <select v-model="newSession.mentor_profile_id" required class="input">
+            <option value="" disabled>Válassz mentort</option>
+            <option v-for="mentor in mentors" :key="mentor.id" :value="String(mentor.id)">
+              {{ mentor.name }}
+            </option>
+          </select>
         </div>
         <div>
           <label>Időpont:</label>
-          <input type="datetime-local" v-model="newSession.scheduled_time" required class="input" />
+          <input type="datetime-local" v-model="newSession.scheduled_time" :min="minDateTime" required class="input" />
         </div>
         <button type="submit" class="btn btn-primary">Létrehozás</button>
       </form>
@@ -115,8 +184,10 @@ onMounted(() => {
       
       <div v-for="session in sessions" :key="session.id" class="session-card">
         <div class="session-info">
-          <p><strong>ID:</strong> {{ session.id }}</p>
-          <p><strong>Mentor Profile ID:</strong> {{ session.mentor_profile_id }}</p>
+          <p>
+            <strong>Mentor:</strong>
+            {{ mentorByProfileId.get(String(session.mentor_profile_id))?.name || `Profil ID: ${session.mentor_profile_id}` }}
+          </p>
           <p><strong>Időpont:</strong> {{ new Date(session.scheduled_time).toLocaleString('hu-HU') }}</p>
           <p>
             <strong>Státusz:</strong> 

@@ -8,6 +8,7 @@ const mentors = ref([])
 const loading = ref(false)
 const error = ref('')
 const actionMessage = ref('')
+const isAuthenticated = ref(false)
 
 const searchText = ref('')
 const languageFilter = ref('all')
@@ -19,6 +20,10 @@ const minBookingDateTime = ref('')
 const API_BASE_URL = 'http://127.0.0.1:8000'
 
 const getStoredToken = () => localStorage.getItem('token') || localStorage.getItem('access_token')
+
+const syncAuthState = () => {
+  isAuthenticated.value = !!getStoredToken()
+}
 
 const formatDefaultBookingTime = () => {
   const now = new Date()
@@ -128,6 +133,10 @@ const fetchMentors = async () => {
 }
 
 const toggleBooking = (mentorId) => {
+  if (!isAuthenticated.value) {
+    actionMessage.value = 'A foglalashoz jelentkezz be.'
+    return
+  }
   actionMessage.value = ''
   minBookingDateTime.value = formatMinBookingTime()
   if (selectedMentorId.value === mentorId) {
@@ -140,6 +149,7 @@ const toggleBooking = (mentorId) => {
 
 const handleBooking = async (mentor) => {
   actionMessage.value = ''
+  syncAuthState()
 
   const token = getStoredToken()
   if (!token) {
@@ -192,7 +202,10 @@ const handleBooking = async (mentor) => {
   }
 }
 
-onMounted(fetchMentors)
+onMounted(() => {
+  syncAuthState()
+  fetchMentors()
+})
 </script>
 
 <template>
@@ -242,12 +255,15 @@ onMounted(fetchMentors)
         </div>
 
         <div class="card-actions">
-          <button class="book-btn" @click="toggleBooking(mentor.id)">
+          <button v-if="isAuthenticated" class="book-btn" @click="toggleBooking(mentor.id)">
             {{ selectedMentorId === mentor.id ? 'Mégse' : 'Foglalás' }}
           </button>
+          <router-link v-else class="guest-book-link" :to="{ name: 'Login', query: { redirect: '/mentors' } }">
+            Bejelentkezes a foglalashoz
+          </router-link>
         </div>
 
-        <div v-if="selectedMentorId === mentor.id" class="booking-panel">
+        <div v-if="isAuthenticated && selectedMentorId === mentor.id" class="booking-panel">
           <label class="booking-label" :for="`booking-${mentor.id}`">Valassz idopontot</label>
           <input
             :id="`booking-${mentor.id}`"
@@ -415,6 +431,17 @@ onMounted(fetchMentors)
 .book-btn {
   background: #1f67c8;
   color: #ffffff;
+}
+
+.guest-book-link {
+  display: inline-block;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-weight: 600;
+  color: #1f67c8;
+  border: 1px dashed #8db2e4;
+  background: #f7fbff;
 }
 
 .confirm-booking {

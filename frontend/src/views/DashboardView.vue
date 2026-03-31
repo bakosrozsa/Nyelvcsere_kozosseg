@@ -39,7 +39,13 @@ const fetchUsers = async () => {
     }
 
     const data = await response.json()
-    users.value = data
+    users.value = data.map((user) => {
+      const avatarSeed = encodeURIComponent(user.name || `user-${user.id}`)
+      return {
+        ...user,
+        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${avatarSeed}`,
+      }
+    })
   } catch (err) {
     error.value = err.message || 'An error occurred while fetching users.'
     console.error(error.value)
@@ -77,7 +83,10 @@ onMounted(() => {
 
     <div v-else-if="users.length > 0" class="users-grid">
       <div v-for="user in users" :key="user.id" class="user-card">
-        <h3>{{ user.name }}</h3>
+        <div class="card-head">
+          <img class="avatar" :src="user.avatarUrl" :alt="`${user.name} profilkep`" />
+          <h3>{{ user.name }}</h3>
+        </div>
         <p><strong>Email:</strong> {{ user.email }}</p>
         <p><strong>Szerep:</strong> <span class="role" :class="user.role">{{ user.role }}</span></p>
         <p><strong>ID:</strong> {{ user.id }}</p>
@@ -167,19 +176,36 @@ onMounted(() => {
 
 .user-card {
   background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s;
+  box-shadow: 0 6px 18px rgba(14, 29, 52, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .user-card:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 14px 28px rgba(14, 29, 52, 0.16);
+  border-color: #bfd3eb;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 2px solid #d9e6f5;
+  background: #f5f9ff;
 }
 
 .user-card h3 {
-  margin: 0 0 12px;
+  margin: 0;
   color: #2c3e50;
 }
 
