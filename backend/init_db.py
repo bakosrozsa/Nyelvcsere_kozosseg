@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
 
+from passlib.context import CryptContext
 from database import SessionLocal, engine
 from models import Base, Language, MentorProfile, ProgressLog, Session, User
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def init_db() -> None:
@@ -9,8 +12,17 @@ def init_db() -> None:
 
     db = SessionLocal()
     try:
-        if db.query(User).first():
-            print("Demo adatok mar leteznek, seed kihagyva.")
+        existing_user = db.query(User).first()
+        if existing_user:
+            english = db.query(Language).filter(Language.name == "English").first()
+            peter = db.query(User).filter(User.email == "peter.student@example.com").first()
+
+            if peter and english and peter.learning_language_id is None:
+                peter.learning_language_id = english.id
+                db.commit()
+                print("Demo tanulo nyelvi cel frissitve.")
+            else:
+                print("Demo adatok mar leteznek, seed kihagyva.")
             return
 
         english = Language(name="English")
@@ -22,14 +34,15 @@ def init_db() -> None:
         mentor_user = User(
             name="Kovacs Anna",
             email="anna.mentor@example.com",
-            hashed_password="demo_hash_mentor",
+            hashed_password=pwd_context.hash("demo123"),
             role="mentor",
         )
         student_user = User(
             name="Nagy Peter",
             email="peter.student@example.com",
-            hashed_password="demo_hash_student",
+            hashed_password=pwd_context.hash("demo123"),
             role="student",
+            learning_language_id=english.id,
         )
         db.add_all([mentor_user, student_user])
         db.flush()

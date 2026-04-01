@@ -8,6 +8,9 @@ const mentors = ref([])
 const loading = ref(false)
 const error = ref('')
 const minDateTime = ref('')
+const progressBySession = ref({})
+const progressForms = ref({})
+const progressSaving = ref({})
 
 // Űrlap adatai az új foglaláshoz (Create)
 const newSession = ref({
@@ -46,12 +49,40 @@ const fetchSessions = async () => {
   try {
     const response = await axios.get(`${API_BASE_URL}/sessions`, { headers: getHeaders() })
     sessions.value = response.data
+    await fetchProgressLogsForSessions()
   } catch (err) {
     error.value = 'Hiba a foglalkozások lekérésekor.'
     console.error(err)
   } finally {
     loading.value = false
   }
+}
+
+const fetchProgressLogsForSessions = async () => {
+  const nextProgress = {}
+  const nextForms = {}
+
+  await Promise.all(
+    sessions.value.map(async (session) => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/sessions/${session.id}/progress-log`, {
+          headers: getHeaders(),
+        })
+        const progress = response.data
+        nextProgress[session.id] = progress
+        nextForms[session.id] = {
+          notes: progress?.notes || '',
+          rating: progress?.rating ? String(progress.rating) : '',
+        }
+      } catch (err) {
+        nextProgress[session.id] = null
+        nextForms[session.id] = { notes: '', rating: '' }
+      }
+    })
+  )
+
+  progressBySession.value = nextProgress
+  progressForms.value = nextForms
 }
 
 const fetchMentors = async () => {
@@ -142,6 +173,34 @@ const deleteSession = async (sessionId) => {
   }
 }
 
+const saveSessionProgress = async (sessionId) => {
+  const form = progressForms.value[sessionId] || { notes: '', rating: '' }
+  progressSaving.value = { ...progressSaving.value, [sessionId]: true }
+
+  try {
+    const payload = {
+      notes: form.notes?.trim() || null,
+      rating: form.rating ? Number(form.rating) : null,
+    }
+    const response = await axios.put(
+      `${API_BASE_URL}/sessions/${sessionId}/progress-log`,
+      payload,
+      { headers: getHeaders() }
+    )
+
+    progressBySession.value = {
+      ...progressBySession.value,
+      [sessionId]: response.data,
+    }
+    alert('Előrehaladás mentve.')
+  } catch (err) {
+    alert('Hiba történt az előrehaladás mentésekor.')
+    console.error(err)
+  } finally {
+    progressSaving.value = { ...progressSaving.value, [sessionId]: false }
+  }
+}
+
 // Oldal betöltésekor egyből lekérjük az adatokat
 onMounted(() => {
   minDateTime.value = getCurrentDateTimeLocal()
@@ -193,6 +252,43 @@ onMounted(() => {
             <strong>Státusz:</strong> 
             <span :class="['status-badge', session.status]">{{ session.status }}</span>
           </p>
+          <p>
+            <strong>Előrehaladás:</strong>
+            {{ progressBySession[session.id]?.rating ? `${progressBySession[session.id].rating}/5` : 'Nincs értékelés' }}
+          </p>
+          <p v-if="progressBySession[session.id]?.notes">
+            <strong>Megjegyzés:</strong> {{ progressBySession[session.id].notes }}
+          </p>
+
+          <div class="progress-editor">
+            <h4>Session előrehaladás</h4>
+            <label :for="`rating-${session.id}`">Értékelés (1-5)</label>
+            <select :id="`rating-${session.id}`" v-model="progressForms[session.id].rating" class="input">
+              <option value="">Nincs értékelés</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+
+            <label :for="`notes-${session.id}`">Megjegyzés</label>
+            <textarea
+              :id="`notes-${session.id}`"
+              v-model="progressForms[session.id].notes"
+              class="input notes-input"
+              rows="3"
+              placeholder="Mit gyakoroltatok, miben fejlődött a tanuló?"
+            />
+
+            <button
+              class="btn btn-primary"
+              :disabled="progressSaving[session.id]"
+              @click="saveSessionProgress(session.id)"
+            >
+              {{ progressSaving[session.id] ? 'Mentés...' : 'Előrehaladás mentése' }}
+            </button>
+          </div>
         </div>
         
         <div class="session-actions">
@@ -221,6 +317,9 @@ h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
 
 .session-card { background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
 .session-info p { margin: 5px 0; }
+.progress-editor { margin-top: 12px; padding: 10px; background: #f6f9ff; border: 1px solid #d8e3f4; border-radius: 8px; display: grid; gap: 8px; }
+.progress-editor h4 { margin: 0 0 2px; color: #2c3e50; font-size: 0.95rem; }
+.notes-input { resize: vertical; min-height: 72px; }
 
 .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 0.85rem; font-weight: bold; }
 .status-badge.scheduled { background: #cce5ff; color: #004085; }

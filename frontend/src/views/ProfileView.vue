@@ -6,8 +6,11 @@ const router = useRouter()
 const user = ref(null)
 const mentorProfile = ref(null)
 const languages = ref([])
+const learningLanguageId = ref('')
 const offeredLanguageId = ref('')
 const requestedLanguageId = ref('')
+const availabilityDetails = ref('')
+const exchangeTerms = ref('')
 const saveLoading = ref(false)
 const saveMessage = ref('')
 const loading = ref(false)
@@ -16,6 +19,13 @@ const error = ref('')
 const API_BASE_URL = 'http://127.0.0.1:8000'
 
 const getToken = () => localStorage.getItem('token') || localStorage.getItem('access_token')
+
+const getAvailableRequestedLanguages = () => {
+  if (!offeredLanguageId.value) {
+    return languages.value
+  }
+  return languages.value.filter((lang) => String(lang.id) !== String(offeredLanguageId.value))
+}
 
 const fetchCurrentUser = async () => {
   loading.value = true
@@ -51,6 +61,7 @@ const fetchCurrentUser = async () => {
     const meData = await meResponse.json()
     languages.value = await languagesResponse.json()
     user.value = meData
+    learningLanguageId.value = meData.learning_language_id ? String(meData.learning_language_id) : ''
 
     if (meData.role === 'mentor') {
       const mentorProfileResponse = await fetch(`${API_BASE_URL}/mentor-profile/me`, {
@@ -69,6 +80,8 @@ const fetchCurrentUser = async () => {
       mentorProfile.value = mentorData
       offeredLanguageId.value = mentorData.offered_language_id ? String(mentorData.offered_language_id) : ''
       requestedLanguageId.value = mentorData.requested_language_id ? String(mentorData.requested_language_id) : ''
+      availabilityDetails.value = mentorData.availability_details || ''
+      exchangeTerms.value = mentorData.exchange_terms || ''
     }
   } catch (err) {
     error.value = err.message || 'Hiba történt.'
@@ -80,6 +93,13 @@ const fetchCurrentUser = async () => {
 const updateMentorLanguages = async () => {
   if (!user.value || user.value.role !== 'mentor') {
     return
+  }
+
+  if (offeredLanguageId.value && requestedLanguageId.value) {
+    if (Number(offeredLanguageId.value) === Number(requestedLanguageId.value)) {
+      saveMessage.value = 'A tanított és tanult nyelvek nem lehetnek azonosak!'
+      return
+    }
   }
 
   saveMessage.value = ''
@@ -100,6 +120,8 @@ const updateMentorLanguages = async () => {
       body: JSON.stringify({
         offered_language_id: offeredLanguageId.value ? Number(offeredLanguageId.value) : null,
         requested_language_id: requestedLanguageId.value ? Number(requestedLanguageId.value) : null,
+        availability_details: availabilityDetails.value?.trim() || null,
+        exchange_terms: exchangeTerms.value?.trim() || null,
       }),
     })
 
@@ -113,6 +135,51 @@ const updateMentorLanguages = async () => {
     saveMessage.value = 'A mentor nyelvi beallitasok sikeresen frissultek.'
   } catch (err) {
     saveMessage.value = err.message || 'Hiba tortent mentes kozben.'
+  } finally {
+    saveLoading.value = false
+  }
+}
+
+const updateStudentGoal = async () => {
+  if (!user.value || user.value.role !== 'student') {
+    return
+  }
+
+  if (!learningLanguageId.value) {
+    saveMessage.value = 'Kérlek, válassz egy tanulni kívánt nyelvet.'
+    return
+  }
+
+  saveMessage.value = ''
+  saveLoading.value = true
+  try {
+    const token = getToken()
+    if (!token) {
+      router.push({ name: 'Login' })
+      return
+    }
+
+    const response = await fetch(`${API_BASE_URL}/users/me`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        learning_language_id: Number(learningLanguageId.value),
+      }),
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(data.detail || 'Nem sikerült menteni a tanulási célt.')
+    }
+
+    const data = await response.json()
+    user.value = { ...user.value, learning_language_id: data.learning_language_id }
+    saveMessage.value = 'A tanulási cél sikeresen frissült.'
+  } catch (err) {
+    saveMessage.value = err.message || 'Hiba történt mentés közben.'
   } finally {
     saveLoading.value = false
   }
@@ -135,6 +202,24 @@ onMounted(() => {
       <p><strong>Email:</strong> {{ user.email }}</p>
       <p><strong>Szerep:</strong> {{ user.role }}</p>
 
+      <form v-if="user.role === 'student'" class="mentor-form" @submit.prevent="updateStudentGoal">
+        <h3>Tanulási cél</h3>
+
+        <label for="learningLanguage">Tanulni kívánt nyelv</label>
+        <select id="learningLanguage" v-model="learningLanguageId">
+          <option value="">Valassz nyelvet</option>
+          <option v-for="language in languages" :key="`student-${language.id}`" :value="String(language.id)">
+            {{ language.name }}
+          </option>
+        </select>
+
+        <button type="submit" :disabled="saveLoading">
+          {{ saveLoading ? 'Mentes...' : 'Tanulási cél mentése' }}
+        </button>
+
+        <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
+      </form>
+
       <form v-if="user.role === 'mentor'" class="mentor-form" @submit.prevent="updateMentorLanguages">
         <h3>Mentor nyelvi beallitasok</h3>
 
@@ -149,10 +234,26 @@ onMounted(() => {
         <label for="requestedLanguage">Tanulni vágyott nyelv</label>
         <select id="requestedLanguage" v-model="requestedLanguageId">
           <option value="">Valassz nyelvet</option>
-          <option v-for="language in languages" :key="`request-${language.id}`" :value="String(language.id)">
+          <option v-for="language in getAvailableRequestedLanguages()" :key="`request-${language.id}`" :value="String(language.id)">
             {{ language.name }}
           </option>
         </select>
+
+        <label for="availabilityDetails">Elérhetőség</label>
+        <textarea
+          id="availabilityDetails"
+          v-model="availabilityDetails"
+          rows="3"
+          placeholder="Pl.: Hetkoznap estenkent 18:00 utan"
+        />
+
+        <label for="exchangeTerms">Csere feltételei</label>
+        <textarea
+          id="exchangeTerms"
+          v-model="exchangeTerms"
+          rows="3"
+          placeholder="Pl.: EN-HU nyelvpar, heti minimum 1 alkalom"
+        />
 
         <button type="submit" :disabled="saveLoading">
           {{ saveLoading ? 'Mentes...' : 'Mentor nyelvek mentese' }}
@@ -218,11 +319,17 @@ onMounted(() => {
 }
 
 .mentor-form select,
+.mentor-form textarea,
 .mentor-form button {
   border: 1px solid #cfd9e3;
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.95rem;
+}
+
+.mentor-form textarea {
+  resize: vertical;
+  min-height: 72px;
 }
 
 .mentor-form button {

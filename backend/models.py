@@ -12,9 +12,11 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False)
+    learning_language_id = Column(Integer, ForeignKey("languages.id"), nullable=True)
 
     mentor_profile = relationship("MentorProfile", back_populates="user", uselist=False)
     sessions_as_student = relationship("Session", back_populates="student")
+    learning_language = relationship("Language", foreign_keys=[learning_language_id])
 
 class Language(Base):
     __tablename__ = "languages"
@@ -30,6 +32,8 @@ class MentorProfile(Base):
     offered_language_id = Column(Integer, ForeignKey("languages.id"))
     requested_language_id = Column(Integer, ForeignKey("languages.id"))
     session_length_minutes = Column(Integer, default=60)
+    availability_details = Column(Text, nullable=True)
+    exchange_terms = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="mentor_profile")
     offered_language = relationship("Language", foreign_keys=[offered_language_id])

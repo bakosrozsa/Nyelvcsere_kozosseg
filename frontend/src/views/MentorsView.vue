@@ -121,6 +121,8 @@ const fetchMentors = async () => {
           teachesLanguage: languagesById.get(profile.offered_language_id)?.name || 'Nincs megadva',
           learnsLanguage: languagesById.get(profile.requested_language_id)?.name || 'Nincs megadva',
           sessionLength: profile.session_length_minutes || 60,
+          availabilityDetails: profile.availability_details || 'Nincs megadva',
+          exchangeTerms: profile.exchange_terms || 'Nincs megadva',
           avatarUrl,
         }
       })
@@ -252,6 +254,8 @@ onMounted(() => {
           <p><strong>Tanított nyelv:</strong> {{ mentor.teachesLanguage }}</p>
           <p><strong>Tanulni szeretné:</strong> {{ mentor.learnsLanguage }}</p>
           <p><strong>Foglalkozás hossza:</strong> {{ mentor.sessionLength }} perc</p>
+          <p><strong>Elérhetőség:</strong> {{ mentor.availabilityDetails }}</p>
+          <p><strong>Csere feltételei:</strong> {{ mentor.exchangeTerms }}</p>
         </div>
 
         <div class="card-actions">

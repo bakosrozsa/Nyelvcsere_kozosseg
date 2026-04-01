@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from database import engine, get_db
@@ -45,14 +46,23 @@ class UserOut(BaseModel):
     name: str
     email: str
     role: str
+    learning_language_id: Optional[int] = None
 
 class UserRegister(BaseModel):
     name: str
     email: str
     password: str
     role: str = "student"
+    learning_language_id: Optional[int] = None
     offered_language_id: Optional[int] = None
     requested_language_id: Optional[int] = None
+    availability_details: Optional[str] = None
+    exchange_terms: Optional[str] = None
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    learning_language_id: Optional[int] = None
 
 class CurrentUserOut(BaseModel):
     is_authenticated: bool
@@ -60,6 +70,7 @@ class CurrentUserOut(BaseModel):
     id: Optional[int] = None
     name: Optional[str] = None
     email: Optional[str] = None
+    learning_language_id: Optional[int] = None
 
 class TokenOut(BaseModel):
     access_token: str
@@ -77,6 +88,8 @@ class MentorProfileOut(BaseModel):
     offered_language_id: Optional[int]
     requested_language_id: Optional[int]
     session_length_minutes: int
+    availability_details: Optional[str] = None
+    exchange_terms: Optional[str] = None
 
 class MentorProfileMeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -85,11 +98,34 @@ class MentorProfileMeOut(BaseModel):
     offered_language_id: Optional[int]
     requested_language_id: Optional[int]
     session_length_minutes: int
+    availability_details: Optional[str] = None
+    exchange_terms: Optional[str] = None
+
+
+class PairingSuggestionOut(BaseModel):
+    student_id: int
+    student_name: str
+    student_email: str
+    learning_language_id: Optional[int]
+    learning_language_name: Optional[str] = None
+    mentor_profile_id: int
+    mentor_name: str
+    mentor_email: str
+    mentor_language_id: Optional[int]
+    mentor_language_name: Optional[str] = None
+
+
+class ResourceOut(BaseModel):
+    title: str
+    description: str
+    url: str
 
 class MentorProfileUpdate(BaseModel):
     offered_language_id: Optional[int] = None
     requested_language_id: Optional[int] = None
     session_length_minutes: Optional[int] = None
+    availability_details: Optional[str] = None
+    exchange_terms: Optional[str] = None
 
 class SessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -114,6 +150,10 @@ class ProgressLogOut(BaseModel):
     student_id: int
     notes: Optional[str]
     rating: Optional[int]
+
+class ProgressLogUpsert(BaseModel):
+    notes: Optional[str] = None
+    rating: Optional[int] = None
 
 
 def truncate_password_for_bcrypt(password: str) -> str:
@@ -190,6 +230,44 @@ def get_current_user_or_guest(
     return user
 
 
+def ensure_mentor_profile_schema() -> None:
+    inspector = inspect(engine)
+    if "mentor_profiles" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("mentor_profiles")}
+    alter_statements = []
+
+    if "availability_details" not in existing_columns:
+        alter_statements.append("ALTER TABLE mentor_profiles ADD COLUMN availability_details TEXT")
+    if "exchange_terms" not in existing_columns:
+        alter_statements.append("ALTER TABLE mentor_profiles ADD COLUMN exchange_terms TEXT")
+
+    if not alter_statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in alter_statements:
+            connection.execute(text(statement))
+
+
+def ensure_user_schema() -> None:
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    if "learning_language_id" in existing_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE users ADD COLUMN learning_language_id INTEGER"))
+
+
+ensure_mentor_profile_schema()
+ensure_user_schema()
+
+
 @app.get("/")
 def root() -> dict:
     return {"message": "Nyelvcsere FastAPI backend is running"}
@@ -212,6 +290,15 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
     ):
         raise HTTPException(status_code=400, detail="Language preferences are only allowed for mentor role")
 
+    if payload.role == "student" and payload.learning_language_id is not None:
+        learning_language = db.query(Language).filter(Language.id == payload.learning_language_id).first()
+        if not learning_language:
+            raise HTTPException(status_code=400, detail="Invalid learning_language_id")
+
+    if payload.role == "mentor" and payload.offered_language_id is not None and payload.requested_language_id is not None:
+        if payload.offered_language_id == payload.requested_language_id:
+            raise HTTPException(status_code=400, detail="A tanított és tanult nyelvek nem lehetnek azonosak")
+
     if payload.offered_language_id is not None:
         offered_language = db.query(Language).filter(Language.id == payload.offered_language_id).first()
         if not offered_language:
@@ -222,6 +309,11 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
         if not requested_language:
             raise HTTPException(status_code=400, detail="Invalid requested_language_id")
 
+    if payload.role == "mentor" and payload.learning_language_id is not None:
+        learning_language = db.query(Language).filter(Language.id == payload.learning_language_id).first()
+        if not learning_language:
+            raise HTTPException(status_code=400, detail="Invalid learning_language_id")
+
     normalized_password = truncate_password_for_bcrypt(payload.password)
     hashed_password = pwd_context.hash(normalized_password)
     user = User(
@@ -229,6 +321,7 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
         email=payload.email,
         hashed_password=hashed_password,
         role=payload.role,
+        learning_language_id=payload.learning_language_id,
     )
     try:
         db.add(user)
@@ -240,6 +333,8 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
                 offered_language_id=payload.offered_language_id,
                 requested_language_id=payload.requested_language_id,
                 session_length_minutes=60,
+                availability_details=payload.availability_details,
+                exchange_terms=payload.exchange_terms,
             )
             db.add(mentor_profile)
 
@@ -290,7 +385,28 @@ def read_current_user(current_user: Optional[User] = Depends(get_current_user_or
         id=current_user.id,
         name=current_user.name,
         email=current_user.email,
+        learning_language_id=current_user.learning_language_id,
     )
+
+
+@app.put("/users/me", response_model=UserOut)
+def update_current_user(
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if payload.name is not None:
+        current_user.name = payload.name.strip() or current_user.name
+
+    if payload.learning_language_id is not None:
+        learning_language = db.query(Language).filter(Language.id == payload.learning_language_id).first()
+        if not learning_language:
+            raise HTTPException(status_code=400, detail="Invalid learning_language_id")
+        current_user.learning_language_id = payload.learning_language_id
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> User:
@@ -308,6 +424,107 @@ def list_mentor_profiles(db: Session = Depends(get_db)) -> List[MentorProfile]:
     return db.query(MentorProfile).all()
 
 
+@app.get("/pairing-suggestions", response_model=List[PairingSuggestionOut])
+def list_pairing_suggestions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[dict]:
+    if current_user.role not in {"mentor"}:
+        raise HTTPException(status_code=403, detail="Only mentors can access pairing suggestions")
+
+    languages = {language.id: language.name for language in db.query(Language).all()}
+    students = db.query(User).filter(User.role == "student").all()
+    mentor_profiles = db.query(MentorProfile).all()
+
+    suggestions: List[dict] = []
+    for student in students:
+        if student.learning_language_id is None:
+            continue
+        for mentor_profile in mentor_profiles:
+            if mentor_profile.offered_language_id != student.learning_language_id:
+                continue
+
+            mentor = db.query(User).filter(User.id == mentor_profile.user_id).first()
+            if mentor is None:
+                continue
+
+            suggestions.append(
+                {
+                    "student_id": student.id,
+                    "student_name": student.name,
+                    "student_email": student.email,
+                    "learning_language_id": student.learning_language_id,
+                    "learning_language_name": languages.get(student.learning_language_id),
+                    "mentor_profile_id": mentor_profile.id,
+                    "mentor_name": mentor.name,
+                    "mentor_email": mentor.email,
+                    "mentor_language_id": mentor_profile.offered_language_id,
+                    "mentor_language_name": languages.get(mentor_profile.offered_language_id),
+                }
+            )
+
+    return suggestions
+
+
+@app.get("/mentor-resources", response_model=List[ResourceOut])
+def list_mentor_resources(current_user: User = Depends(get_current_user)) -> List[dict]:
+    if current_user.role not in {"mentor"}:
+        raise HTTPException(status_code=403, detail="Only mentors can access mentor resources")
+
+    return [
+        {
+            "title": "Párosítási útmutató",
+            "description": "Tippek a nyelvi célok alapján történő párosításhoz és az optimális cserealkalmak kiválasztásához.",
+            "url": "https://example.com/pairing-guide",
+        },
+        {
+            "title": "Beszélgetési sablonok",
+            "description": "Ötletek a kezdő és haladó nyelvi cserealkalmakhoz.",
+            "url": "https://example.com/conversation-templates",
+        },
+        {
+            "title": "Közösségi irányelvek",
+            "description": "Útmutató a biztonságos és tiszteletteljes közösségi interakciókhoz.",
+            "url": "https://example.com/community-guidelines",
+        },
+    ]
+
+
+@app.get("/community-interactions")
+def list_community_interactions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if current_user.role not in {"mentor"}:
+        raise HTTPException(status_code=403, detail="Only mentors can access community interactions")
+
+    recent_sessions = db.query(StudySession).order_by(StudySession.scheduled_time.desc()).limit(10).all()
+    recent_progress_logs = db.query(ProgressLog).order_by(ProgressLog.id.desc()).limit(10).all()
+
+    return {
+        "recent_sessions": [
+            {
+                "id": session.id,
+                "scheduled_time": session.scheduled_time,
+                "status": session.status,
+                "mentor_profile_id": session.mentor_profile_id,
+                "student_id": session.student_id,
+            }
+            for session in recent_sessions
+        ],
+        "recent_progress_logs": [
+            {
+                "id": log.id,
+                "session_id": log.session_id,
+                "student_id": log.student_id,
+                "notes": log.notes,
+                "rating": log.rating,
+            }
+            for log in recent_progress_logs
+        ],
+    }
+
+
 @app.get("/mentor-profile/me", response_model=MentorProfileMeOut)
 def get_my_mentor_profile(
     db: Session = Depends(get_db),
@@ -323,6 +540,8 @@ def get_my_mentor_profile(
             offered_language_id=None,
             requested_language_id=None,
             session_length_minutes=60,
+            availability_details=None,
+            exchange_terms=None,
         )
         db.add(mentor_profile)
         db.commit()
@@ -346,6 +565,8 @@ def update_my_mentor_profile(
             offered_language_id=None,
             requested_language_id=None,
             session_length_minutes=60,
+            availability_details=None,
+            exchange_terms=None,
         )
         db.add(mentor_profile)
         db.flush()
@@ -362,10 +583,20 @@ def update_my_mentor_profile(
             raise HTTPException(status_code=400, detail="Invalid requested_language_id")
         mentor_profile.requested_language_id = payload.requested_language_id
 
+    if mentor_profile.offered_language_id is not None and mentor_profile.requested_language_id is not None:
+        if mentor_profile.offered_language_id == mentor_profile.requested_language_id:
+            raise HTTPException(status_code=400, detail="A tanított és tanult nyelvek nem lehetnek azonosak")
+
     if payload.session_length_minutes is not None:
         if payload.session_length_minutes < 15 or payload.session_length_minutes > 240:
             raise HTTPException(status_code=400, detail="session_length_minutes must be between 15 and 240")
         mentor_profile.session_length_minutes = payload.session_length_minutes
+
+    if payload.availability_details is not None:
+        mentor_profile.availability_details = payload.availability_details.strip() or None
+
+    if payload.exchange_terms is not None:
+        mentor_profile.exchange_terms = payload.exchange_terms.strip() or None
 
     db.commit()
     db.refresh(mentor_profile)
@@ -379,6 +610,57 @@ def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(ge
 @app.get("/progress-logs", response_model=List[ProgressLogOut])
 def list_progress_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[ProgressLog]:
     return db.query(ProgressLog).all()
+
+
+@app.get("/sessions/{session_id}/progress-log", response_model=Optional[ProgressLogOut])
+def get_session_progress_log(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Optional[ProgressLog]:
+    db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if current_user.id != db_session.student_id and current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Not enough permissions for this session")
+
+    return db.query(ProgressLog).filter(ProgressLog.session_id == session_id).first()
+
+
+@app.put("/sessions/{session_id}/progress-log", response_model=ProgressLogOut)
+def upsert_session_progress_log(
+    session_id: int,
+    payload: ProgressLogUpsert,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProgressLog:
+    db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if current_user.id != db_session.student_id and current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Not enough permissions for this session")
+
+    if payload.rating is not None and (payload.rating < 1 or payload.rating > 5):
+        raise HTTPException(status_code=400, detail="rating must be between 1 and 5")
+
+    progress_log = db.query(ProgressLog).filter(ProgressLog.session_id == session_id).first()
+    if progress_log is None:
+        progress_log = ProgressLog(
+            session_id=session_id,
+            student_id=db_session.student_id,
+            notes=payload.notes,
+            rating=payload.rating,
+        )
+        db.add(progress_log)
+    else:
+        progress_log.notes = payload.notes
+        progress_log.rating = payload.rating
+
+    db.commit()
+    db.refresh(progress_log)
+    return progress_log
 
 
 @app.post("/sessions", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
