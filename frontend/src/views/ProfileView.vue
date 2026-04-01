@@ -192,75 +192,77 @@ onMounted(() => {
 
 <template>
   <div class="profile">
-    <h2>Profil</h2>
+    <div class="profile-shell">
+      <h2>Profil</h2>
 
-    <div v-if="error" class="error">{{ error }}</div>
-    <div v-if="loading" class="loading">Betöltés...</div>
+      <div v-if="error" class="error">{{ error }}</div>
+      <div v-if="loading" class="loading">Betöltés...</div>
 
-    <div v-if="user" class="profile-info">
-      <p><strong>Név:</strong> {{ user.name }}</p>
-      <p><strong>Email:</strong> {{ user.email }}</p>
-      <p><strong>Szerep:</strong> {{ user.role }}</p>
+      <div v-if="user" class="profile-info">
+        <p><strong>Név:</strong> {{ user.name }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>Szerep:</strong> {{ user.role }}</p>
 
-      <form v-if="user.role === 'student'" class="mentor-form" @submit.prevent="updateStudentGoal">
-        <h3>Tanulási cél</h3>
+        <form v-if="user.role === 'student'" class="mentor-form" @submit.prevent="updateStudentGoal">
+          <h3>Tanulási cél</h3>
 
-        <label for="learningLanguage">Tanulni kívánt nyelv</label>
-        <select id="learningLanguage" v-model="learningLanguageId">
-          <option value="">Valassz nyelvet</option>
-          <option v-for="language in languages" :key="`student-${language.id}`" :value="String(language.id)">
-            {{ language.name }}
-          </option>
-        </select>
+          <label for="learningLanguage">Tanulni kívánt nyelv</label>
+          <select id="learningLanguage" v-model="learningLanguageId">
+            <option value="">Valassz nyelvet</option>
+            <option v-for="language in languages" :key="`student-${language.id}`" :value="String(language.id)">
+              {{ language.name }}
+            </option>
+          </select>
 
-        <button type="submit" :disabled="saveLoading">
-          {{ saveLoading ? 'Mentes...' : 'Tanulási cél mentése' }}
-        </button>
+          <button type="submit" :disabled="saveLoading">
+            {{ saveLoading ? 'Mentes...' : 'Tanulási cél mentése' }}
+          </button>
 
-        <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
-      </form>
+          <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
+        </form>
 
-      <form v-if="user.role === 'mentor'" class="mentor-form" @submit.prevent="updateMentorLanguages">
-        <h3>Mentor nyelvi beallitasok</h3>
+        <form v-if="user.role === 'mentor'" class="mentor-form" @submit.prevent="updateMentorLanguages">
+          <h3>Mentor nyelvi beallitasok</h3>
 
-        <label for="offeredLanguage">Tanított nyelv</label>
-        <select id="offeredLanguage" v-model="offeredLanguageId">
-          <option value="">Valassz nyelvet</option>
-          <option v-for="language in languages" :key="language.id" :value="String(language.id)">
-            {{ language.name }}
-          </option>
-        </select>
+          <label for="offeredLanguage">Tanított nyelv</label>
+          <select id="offeredLanguage" v-model="offeredLanguageId">
+            <option value="">Valassz nyelvet</option>
+            <option v-for="language in languages" :key="language.id" :value="String(language.id)">
+              {{ language.name }}
+            </option>
+          </select>
 
-        <label for="requestedLanguage">Tanulni vágyott nyelv</label>
-        <select id="requestedLanguage" v-model="requestedLanguageId">
-          <option value="">Valassz nyelvet</option>
-          <option v-for="language in getAvailableRequestedLanguages()" :key="`request-${language.id}`" :value="String(language.id)">
-            {{ language.name }}
-          </option>
-        </select>
+          <label for="requestedLanguage">Tanulni vágyott nyelv</label>
+          <select id="requestedLanguage" v-model="requestedLanguageId">
+            <option value="">Valassz nyelvet</option>
+            <option v-for="language in getAvailableRequestedLanguages()" :key="`request-${language.id}`" :value="String(language.id)">
+              {{ language.name }}
+            </option>
+          </select>
 
-        <label for="availabilityDetails">Elérhetőség</label>
-        <textarea
-          id="availabilityDetails"
-          v-model="availabilityDetails"
-          rows="3"
-          placeholder="Pl.: Hetkoznap estenkent 18:00 utan"
-        />
+          <label for="availabilityDetails">Elérhetőség</label>
+          <textarea
+            id="availabilityDetails"
+            v-model="availabilityDetails"
+            rows="3"
+            placeholder="Pl.: Hetkoznap estenkent 18:00 utan"
+          />
 
-        <label for="exchangeTerms">Csere feltételei</label>
-        <textarea
-          id="exchangeTerms"
-          v-model="exchangeTerms"
-          rows="3"
-          placeholder="Pl.: EN-HU nyelvpar, heti minimum 1 alkalom"
-        />
+          <label for="exchangeTerms">Csere feltételei</label>
+          <textarea
+            id="exchangeTerms"
+            v-model="exchangeTerms"
+            rows="3"
+            placeholder="Pl.: EN-HU nyelvpar, heti minimum 1 alkalom"
+          />
 
-        <button type="submit" :disabled="saveLoading">
-          {{ saveLoading ? 'Mentes...' : 'Mentor nyelvek mentese' }}
-        </button>
+          <button type="submit" :disabled="saveLoading">
+            {{ saveLoading ? 'Mentes...' : 'Mentor nyelvek mentese' }}
+          </button>
 
-        <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
-      </form>
+          <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
+        </form>
+      </div>
     </div>
   </div>
 </template>
@@ -268,6 +270,13 @@ onMounted(() => {
 <style scoped>
 .profile {
   padding: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.profile-shell {
+  width: 100%;
+  max-width: 640px;
 }
 
 .profile h2 {

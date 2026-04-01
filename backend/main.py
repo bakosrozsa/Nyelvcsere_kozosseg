@@ -103,6 +103,7 @@ class MentorProfileMeOut(BaseModel):
 
 
 class PairingSuggestionOut(BaseModel):
+    pairing_type: str
     student_id: int
     student_name: str
     student_email: str
@@ -113,6 +114,20 @@ class PairingSuggestionOut(BaseModel):
     mentor_email: str
     mentor_language_id: Optional[int]
     mentor_language_name: Optional[str] = None
+    mentor_availability_details: Optional[str] = None
+    mentor_exchange_terms: Optional[str] = None
+    match_reason: Optional[str] = None
+
+
+class MentorPairingGroupOut(BaseModel):
+    mentor_profile_id: int
+    mentor_name: str
+    mentor_email: str
+    mentor_language_id: Optional[int]
+    mentor_language_name: Optional[str] = None
+    mentor_availability_details: Optional[str] = None
+    mentor_exchange_terms: Optional[str] = None
+    matched_students: List[PairingSuggestionOut]
 
 
 class ResourceOut(BaseModel):
@@ -230,6 +245,90 @@ def get_current_user_or_guest(
     return user
 
 
+def build_pairing_suggestions(db: Session) -> List[PairingSuggestionOut]:
+    users = db.query(User).all()
+    profiles = db.query(MentorProfile).all()
+    languages = db.query(Language).all()
+
+    users_by_id = {user.id: user for user in users}
+    languages_by_id = {language.id: language for language in languages}
+
+    suggestions: List[PairingSuggestionOut] = []
+
+    for mentor_profile in profiles:
+        mentor_user = users_by_id.get(mentor_profile.user_id)
+        if mentor_user is None:
+            continue
+
+        mentor_language = languages_by_id.get(mentor_profile.offered_language_id)
+        mentor_target_language = languages_by_id.get(mentor_profile.requested_language_id)
+
+        for user in users:
+            if user.id == mentor_user.id:
+                continue
+            if user.learning_language_id is None:
+                continue
+
+            learning_language = languages_by_id.get(user.learning_language_id)
+            is_direct_match = mentor_profile.offered_language_id is not None and user.learning_language_id == mentor_profile.offered_language_id
+            is_reverse_match = (
+                mentor_profile.requested_language_id is not None
+                and mentor_user.learning_language_id is not None
+                and mentor_user.learning_language_id == user.learning_language_id
+            )
+
+            if not is_direct_match and not is_reverse_match:
+                continue
+
+            suggestions.append(
+                PairingSuggestionOut(
+                    pairing_type="mentor-to-student",
+                    student_id=user.id,
+                    student_name=user.name,
+                    student_email=user.email,
+                    learning_language_id=user.learning_language_id,
+                    learning_language_name=learning_language.name if learning_language else None,
+                    mentor_profile_id=mentor_profile.id,
+                    mentor_name=mentor_user.name,
+                    mentor_email=mentor_user.email,
+                    mentor_language_id=mentor_profile.offered_language_id,
+                    mentor_language_name=mentor_language.name if mentor_language else None,
+                    mentor_availability_details=mentor_profile.availability_details,
+                    mentor_exchange_terms=mentor_profile.exchange_terms,
+                    match_reason=(
+                        "Tanulási cél egyezik a mentor által kínált nyelvvel"
+                        if is_direct_match
+                        else "Kölcsönös nyelvi cserelehetőség"
+                    ),
+                )
+            )
+
+    return suggestions
+
+
+def build_mentor_pairing_groups(db: Session) -> List[MentorPairingGroupOut]:
+    suggestions = build_pairing_suggestions(db)
+    grouped: dict[int, dict] = {}
+
+    for suggestion in suggestions:
+        mentor_group = grouped.setdefault(
+            suggestion.mentor_profile_id,
+            {
+                "mentor_profile_id": suggestion.mentor_profile_id,
+                "mentor_name": suggestion.mentor_name,
+                "mentor_email": suggestion.mentor_email,
+                "mentor_language_id": suggestion.mentor_language_id,
+                "mentor_language_name": suggestion.mentor_language_name,
+                "mentor_availability_details": suggestion.mentor_availability_details,
+                "mentor_exchange_terms": suggestion.mentor_exchange_terms,
+                "matched_students": [],
+            },
+        )
+        mentor_group["matched_students"].append(suggestion)
+
+    return [MentorPairingGroupOut(**group) for group in grouped.values()]
+
+
 def ensure_mentor_profile_schema() -> None:
     inspector = inspect(engine)
     if "mentor_profiles" not in inspector.get_table_names():
@@ -264,8 +363,29 @@ def ensure_user_schema() -> None:
         connection.execute(text("ALTER TABLE users ADD COLUMN learning_language_id INTEGER"))
 
 
+def sync_mentor_learning_goals(db: Session) -> None:
+    mentors = db.query(User).filter(User.role == "mentor").all()
+    changed = False
+    for mentor in mentors:
+        mentor_profile = db.query(MentorProfile).filter(MentorProfile.user_id == mentor.id).first()
+        if not mentor_profile:
+            continue
+        if mentor_profile.requested_language_id is None:
+            continue
+        if mentor.learning_language_id != mentor_profile.requested_language_id:
+            mentor.learning_language_id = mentor_profile.requested_language_id
+            changed = True
+
+    if changed:
+        db.commit()
+
+
 ensure_mentor_profile_schema()
 ensure_user_schema()
+
+
+with Session(engine) as bootstrap_db:
+    sync_mentor_learning_goals(bootstrap_db)
 
 
 @app.get("/")
@@ -321,7 +441,9 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
         email=payload.email,
         hashed_password=hashed_password,
         role=payload.role,
-        learning_language_id=payload.learning_language_id,
+        learning_language_id=(
+            payload.requested_language_id if payload.role == "mentor" else payload.learning_language_id
+        ),
     )
     try:
         db.add(user)
@@ -372,12 +494,19 @@ def list_users(
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db)
 ) -> List[User]:
+    sync_mentor_learning_goals(db)
     return db.query(User).offset(skip).limit(limit).all()
 
 @app.get("/users/me", response_model=CurrentUserOut)
-def read_current_user(current_user: Optional[User] = Depends(get_current_user_or_guest)) -> CurrentUserOut:
+def read_current_user(
+    current_user: Optional[User] = Depends(get_current_user_or_guest),
+    db: Session = Depends(get_db),
+) -> CurrentUserOut:
     if current_user is None:
         return CurrentUserOut(is_authenticated=False, role=ROLE_GUEST)
+
+    sync_mentor_learning_goals(db)
+    db.refresh(current_user)
 
     return CurrentUserOut(
         is_authenticated=True,
@@ -425,6 +554,37 @@ def list_mentor_profiles(db: Session = Depends(get_db)) -> List[MentorProfile]:
 
 
 @app.get("/pairing-suggestions", response_model=List[PairingSuggestionOut])
+def pairing_suggestions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[PairingSuggestionOut]:
+    suggestions = build_pairing_suggestions(db)
+    if current_user.role == "mentor":
+        current_user_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
+        if current_user_profile:
+            suggestions = [
+                suggestion
+                for suggestion in suggestions
+                if suggestion.mentor_profile_id == current_user_profile.id
+                or suggestion.student_id == current_user.id
+            ]
+    return suggestions
+
+
+@app.get("/mentor-pairing-groups", response_model=List[MentorPairingGroupOut])
+def mentor_pairing_groups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[MentorPairingGroupOut]:
+    groups = build_mentor_pairing_groups(db)
+    if current_user.role == "mentor":
+        current_user_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
+        if current_user_profile:
+            groups = [group for group in groups if group.mentor_profile_id == current_user_profile.id]
+    return groups
+
+
+@app.get("/pairing-suggestions", response_model=List[PairingSuggestionOut])
 def list_pairing_suggestions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -436,7 +596,7 @@ def list_pairing_suggestions(
     students = db.query(User).filter(User.role == "student").all()
     mentor_profiles = db.query(MentorProfile).all()
 
-    suggestions: List[dict] = []
+    suggestions_with_score: List[tuple[int, dict]] = []
     for student in students:
         if student.learning_language_id is None:
             continue
@@ -448,22 +608,35 @@ def list_pairing_suggestions(
             if mentor is None:
                 continue
 
-            suggestions.append(
-                {
-                    "student_id": student.id,
-                    "student_name": student.name,
-                    "student_email": student.email,
-                    "learning_language_id": student.learning_language_id,
-                    "learning_language_name": languages.get(student.learning_language_id),
-                    "mentor_profile_id": mentor_profile.id,
-                    "mentor_name": mentor.name,
-                    "mentor_email": mentor.email,
-                    "mentor_language_id": mentor_profile.offered_language_id,
-                    "mentor_language_name": languages.get(mentor_profile.offered_language_id),
-                }
+            availability_bonus = 1 if mentor_profile.availability_details else 0
+            exchange_terms_bonus = 1 if mentor_profile.exchange_terms else 0
+            score = 100 + availability_bonus + exchange_terms_bonus
+
+            suggestions_with_score.append(
+                (
+                    score,
+                    {
+                        "student_id": student.id,
+                        "student_name": student.name,
+                        "student_email": student.email,
+                        "learning_language_id": student.learning_language_id,
+                        "learning_language_name": languages.get(student.learning_language_id),
+                        "mentor_profile_id": mentor_profile.id,
+                        "mentor_name": mentor.name,
+                        "mentor_email": mentor.email,
+                        "mentor_language_id": mentor_profile.offered_language_id,
+                        "mentor_language_name": languages.get(mentor_profile.offered_language_id),
+                        "mentor_availability_details": mentor_profile.availability_details,
+                        "mentor_exchange_terms": mentor_profile.exchange_terms,
+                        "match_reason": "Nyelvi cél egyezés"
+                        + (" + elérhetőség" if mentor_profile.availability_details else "")
+                        + (" + cserefeltételek" if mentor_profile.exchange_terms else ""),
+                    },
+                )
             )
 
-    return suggestions
+    suggestions_with_score.sort(key=lambda item: item[0], reverse=True)
+    return [item[1] for item in suggestions_with_score]
 
 
 @app.get("/mentor-resources", response_model=List[ResourceOut])
@@ -582,6 +755,7 @@ def update_my_mentor_profile(
         if not requested_language:
             raise HTTPException(status_code=400, detail="Invalid requested_language_id")
         mentor_profile.requested_language_id = payload.requested_language_id
+        current_user.learning_language_id = payload.requested_language_id
 
     if mentor_profile.offered_language_id is not None and mentor_profile.requested_language_id is not None:
         if mentor_profile.offered_language_id == mentor_profile.requested_language_id:

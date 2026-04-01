@@ -8,7 +8,6 @@ const users = ref([])
 const languages = ref([])
 const pairingSuggestions = ref([])
 const mentorResources = ref([])
-const communityInteractions = ref({ recent_sessions: [], recent_progress_logs: [] })
 const loading = ref(false)
 const error = ref('')
 
@@ -70,10 +69,9 @@ const fetchDashboard = async () => {
     })
 
     if (meData.role === 'mentor') {
-      const [pairingsResponse, resourcesResponse, interactionsResponse] = await Promise.all([
+      const [pairingsResponse, resourcesResponse] = await Promise.all([
         fetch(`${API_BASE_URL}/pairing-suggestions`, { headers }),
         fetch(`${API_BASE_URL}/mentor-resources`, { headers }),
-        fetch(`${API_BASE_URL}/community-interactions`, { headers }),
       ])
 
       if (pairingsResponse.ok) {
@@ -82,13 +80,9 @@ const fetchDashboard = async () => {
       if (resourcesResponse.ok) {
         mentorResources.value = await resourcesResponse.json()
       }
-      if (interactionsResponse.ok) {
-        communityInteractions.value = await interactionsResponse.json()
-      }
     } else {
       pairingSuggestions.value = []
       mentorResources.value = []
-      communityInteractions.value = { recent_sessions: [], recent_progress_logs: [] }
     }
   } catch (err) {
     error.value = err?.message || 'Hiba történt a vezérlőpult betöltésekor.'
@@ -153,6 +147,15 @@ onMounted(fetchDashboard)
                   {{ suggestion.learning_language_name || 'Ismeretlen nyelv' }} → {{ suggestion.mentor_name }}
                 </span>
                 <small>{{ suggestion.mentor_language_name || 'Nincs megadva' }}</small>
+                <small v-if="suggestion.mentor_availability_details">
+                  Elérhetőség: {{ suggestion.mentor_availability_details }}
+                </small>
+                <small v-if="suggestion.mentor_exchange_terms">
+                  Cserefeltétel: {{ suggestion.mentor_exchange_terms }}
+                </small>
+                <small v-if="suggestion.match_reason">
+                  Illeszkedés: {{ suggestion.match_reason }}
+                </small>
               </div>
             </div>
           </article>
@@ -170,35 +173,6 @@ onMounted(fetchDashboard)
             </div>
           </article>
 
-          <article class="tool-card">
-            <h4>Közösségi interakciók</h4>
-            <p class="tool-description">
-              Az utolsó foglalkozások és progress bejegyzések áttekintése.
-            </p>
-            <div class="interaction-block">
-              <h5>Utolsó sessionök</h5>
-              <div v-if="communityInteractions.recent_sessions.length === 0" class="empty-state">
-                Nincsenek még sessionök.
-              </div>
-              <ul v-else class="interaction-list">
-                <li v-for="session in communityInteractions.recent_sessions" :key="session.id">
-                  <strong>#{{ session.id }}</strong> - {{ new Date(session.scheduled_time).toLocaleString('hu-HU') }} - {{ session.status }}
-                </li>
-              </ul>
-            </div>
-            <div class="interaction-block">
-              <h5>Legutóbbi előrehaladási bejegyzések</h5>
-              <div v-if="communityInteractions.recent_progress_logs.length === 0" class="empty-state">
-                Nincsenek progress logok.
-              </div>
-              <ul v-else class="interaction-list">
-                <li v-for="log in communityInteractions.recent_progress_logs" :key="log.id">
-                  <strong>Session #{{ log.session_id }}</strong> - {{ log.rating || 'Nincs értékelés' }} / 5
-                  <span>{{ log.notes || 'Nincs megjegyzés' }}</span>
-                </li>
-              </ul>
-            </div>
-          </article>
         </div>
       </section>
 
@@ -392,6 +366,26 @@ onMounted(fetchDashboard)
 
 .interaction-block {
   margin-top: 12px;
+}
+
+.matched-students {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #d7e2ef;
+}
+
+.matched-students h5 {
+  margin: 0 0 6px;
+  color: #22354b;
+  font-size: 0.92rem;
+}
+
+.matched-students ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #4f6378;
+  display: grid;
+  gap: 4px;
 }
 
 .interaction-block h5 {
