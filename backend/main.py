@@ -449,8 +449,7 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
         if not learning_language:
             raise HTTPException(status_code=400, detail="Invalid learning_language_id")
 
-    normalized_password = truncate_password_for_bcrypt(payload.password)
-    hashed_password = pwd_context.hash(normalized_password)
+    hashed_password = hash_password(payload.password)
     user = User(
         name=payload.name,
         email=payload.email,
@@ -794,11 +793,36 @@ def update_my_mentor_profile(
 
 @app.get("/sessions", response_model=List[SessionOut])
 def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[StudySession]:
-    return db.query(StudySession).all()
+    query = db.query(StudySession)
+    if current_user.role == "student":
+        return query.filter(StudySession.student_id == current_user.id).all()
+
+    if current_user.role == "mentor":
+        return (
+            query
+            .join(MentorProfile, StudySession.mentor_profile_id == MentorProfile.id)
+            .filter(MentorProfile.user_id == current_user.id)
+            .all()
+        )
+
+    return []
 
 @app.get("/progress-logs", response_model=List[ProgressLogOut])
 def list_progress_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[ProgressLog]:
-    return db.query(ProgressLog).all()
+    query = db.query(ProgressLog)
+    if current_user.role == "student":
+        return query.filter(ProgressLog.student_id == current_user.id).all()
+
+    if current_user.role == "mentor":
+        return (
+            query
+            .join(StudySession, ProgressLog.session_id == StudySession.id)
+            .join(MentorProfile, StudySession.mentor_profile_id == MentorProfile.id)
+            .filter(MentorProfile.user_id == current_user.id)
+            .all()
+        )
+
+    return []
 
 
 @app.get("/sessions/{session_id}/progress-log", response_model=Optional[ProgressLogOut])
@@ -811,8 +835,7 @@ def get_session_progress_log(
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if current_user.id != db_session.student_id and current_user.role != "mentor":
-        raise HTTPException(status_code=403, detail="Not enough permissions for this session")
+    ensure_session_access(db_session, current_user, db)
 
     return db.query(ProgressLog).filter(ProgressLog.session_id == session_id).first()
 
@@ -828,8 +851,7 @@ def upsert_session_progress_log(
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if current_user.id != db_session.student_id and current_user.role != "mentor":
-        raise HTTPException(status_code=403, detail="Not enough permissions for this session")
+    ensure_session_access(db_session, current_user, db)
 
     if payload.rating is not None and (payload.rating < 1 or payload.rating > 5):
         raise HTTPException(status_code=400, detail="rating must be between 1 and 5")

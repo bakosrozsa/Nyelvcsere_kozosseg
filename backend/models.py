@@ -31,7 +31,17 @@ class User(Base):
     )
     learning_language_id = Column(Integer, ForeignKey("languages.id"), nullable=True)
 
-    mentor_profile = relationship("MentorProfile", back_populates="user", uselist=False)
+    mentor_profile = relationship(
+        "MentorProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    progress_logs = relationship(
+        "ProgressLog",
+        back_populates="student",
+        cascade="all, delete-orphan",
+    )
     sessions_as_student = relationship("Session", back_populates="student")
     learning_language = relationship("Language", foreign_keys=[learning_language_id])
 
@@ -45,7 +55,7 @@ class MentorProfile(Base):
     __tablename__ = "mentor_profiles"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     offered_language_id = Column(Integer, ForeignKey("languages.id"))
     requested_language_id = Column(Integer, ForeignKey("languages.id"))
     session_length_minutes = Column(Integer, default=60)
@@ -75,9 +85,9 @@ class ProgressLog(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("sessions.id"), unique=True)
-    student_id = Column(Integer, ForeignKey("users.id"))
+    student_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     notes = Column(Text)
     rating = Column(Integer)
 
     session = relationship("Session", back_populates="progress_log")
-    student = relationship("User")
+    student = relationship("User", back_populates="progress_logs")
