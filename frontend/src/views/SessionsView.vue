@@ -144,7 +144,8 @@ const createSession = async () => {
     newSession.value.scheduled_time = ''
     alert('Sikeres időpontfoglalás!')
   } catch (err) {
-    alert('Hiba történt a létrehozás során.')
+    const apiMessage = err?.response?.data?.detail
+    alert(apiMessage || 'Hiba történt a létrehozás során.')
     console.error(err)
   }
 }

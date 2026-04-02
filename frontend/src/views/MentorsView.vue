@@ -192,7 +192,16 @@ const handleBooking = async (mentor) => {
     }
 
     if (!response.ok) {
-      throw new Error('A foglalas nem sikerult. Probald ujra.')
+      let errorDetail = 'A foglalas nem sikerult. Probald ujra.'
+      try {
+        const data = await response.json()
+        if (data?.detail) {
+          errorDetail = data.detail
+        }
+      } catch {
+        // Keep default error message when response body is not JSON.
+      }
+      throw new Error(errorDetail)
     }
 
     actionMessage.value = `${mentor.mentorName} mentorhoz a foglalas sikeres.`

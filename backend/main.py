@@ -879,6 +879,13 @@ def upsert_session_progress_log(
 
 @app.post("/sessions", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
 def create_session(payload: SessionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> StudySession:
+    mentor_profile = db.query(MentorProfile).filter(MentorProfile.id == payload.mentor_profile_id).first()
+    if mentor_profile is None:
+        raise HTTPException(status_code=404, detail="Mentor profile not found")
+
+    if mentor_profile.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot book a session with your own mentor profile")
+
     new_session = StudySession(
         student_id=current_user.id,
         mentor_profile_id=payload.mentor_profile_id,
