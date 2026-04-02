@@ -856,6 +856,9 @@ def upsert_session_progress_log(
     if payload.rating is not None and (payload.rating < 1 or payload.rating > 5):
         raise HTTPException(status_code=400, detail="rating must be between 1 and 5")
 
+    if payload.rating is not None and db_session.status != "completed":
+        raise HTTPException(status_code=400, detail="Rating is allowed only for completed sessions")
+
     progress_log = db.query(ProgressLog).filter(ProgressLog.session_id == session_id).first()
     if progress_log is None:
         progress_log = ProgressLog(

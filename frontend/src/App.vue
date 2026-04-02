@@ -26,11 +26,12 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
+const AUTH_LOGOUT_EVENT = 'auth:logout'
 
 const isAuthenticated = ref(false)
 
@@ -42,8 +43,24 @@ watch(
   { immediate: true }
 )
 
+const syncAuthState = () => {
+  isAuthenticated.value = !!(localStorage.getItem('token') || localStorage.getItem('access_token'))
+}
+
+onMounted(() => {
+  window.addEventListener(AUTH_LOGOUT_EVENT, syncAuthState)
+  window.addEventListener('storage', syncAuthState)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(AUTH_LOGOUT_EVENT, syncAuthState)
+  window.removeEventListener('storage', syncAuthState)
+})
+
 const handleLogout = () => {
   localStorage.removeItem('token')
+  localStorage.removeItem('access_token')
+  window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_EVENT, { detail: { reason: 'manual' } }))
   isAuthenticated.value = false
   router.push('/login')
 }

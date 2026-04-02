@@ -160,6 +160,8 @@ const updateSessionStatus = async (sessionId, newStatus) => {
   }
 }
 
+const canRateSession = (session) => session?.status === 'completed'
+
 // --- 4. DELETE (Törlés) ---
 const deleteSession = async (sessionId) => {
   if (!confirm('Biztosan törölni szeretnéd ezt a foglalkozást?')) return
@@ -173,15 +175,23 @@ const deleteSession = async (sessionId) => {
   }
 }
 
-const saveSessionProgress = async (sessionId) => {
+const saveSessionProgress = async (session) => {
+  const sessionId = session.id
   const form = progressForms.value[sessionId] || { notes: '', rating: '' }
   progressSaving.value = { ...progressSaving.value, [sessionId]: true }
 
   try {
     const payload = {
       notes: form.notes?.trim() || null,
-      rating: form.rating ? Number(form.rating) : null,
     }
+
+    if (canRateSession(session)) {
+      payload.rating = form.rating ? Number(form.rating) : null
+    } else if (form.rating) {
+      alert('Értékelést csak befejezett foglalkozáshoz adhatsz meg.')
+      return
+    }
+
     const response = await axios.put(
       `${API_BASE_URL}/sessions/${sessionId}/progress-log`,
       payload,
@@ -263,7 +273,12 @@ onMounted(() => {
           <div class="progress-editor">
             <h4>Session előrehaladás</h4>
             <label :for="`rating-${session.id}`">Értékelés (1-5)</label>
-            <select :id="`rating-${session.id}`" v-model="progressForms[session.id].rating" class="input">
+            <select
+              :id="`rating-${session.id}`"
+              v-model="progressForms[session.id].rating"
+              class="input"
+              :disabled="!canRateSession(session)"
+            >
               <option value="">Nincs értékelés</option>
               <option value="1">1</option>
               <option value="2">2</option>
@@ -271,6 +286,7 @@ onMounted(() => {
               <option value="4">4</option>
               <option value="5">5</option>
             </select>
+            <small v-if="!canRateSession(session)">Értékelés csak befejezett foglalkozásnál adható.</small>
 
             <label :for="`notes-${session.id}`">Megjegyzés</label>
             <textarea
@@ -284,7 +300,7 @@ onMounted(() => {
             <button
               class="btn btn-primary"
               :disabled="progressSaving[session.id]"
-              @click="saveSessionProgress(session.id)"
+              @click="saveSessionProgress(session)"
             >
               {{ progressSaving[session.id] ? 'Mentés...' : 'Előrehaladás mentése' }}
             </button>
