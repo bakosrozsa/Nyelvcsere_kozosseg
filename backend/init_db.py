@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
 
-from passlib.context import CryptContext
+import bcrypt
 from database import SessionLocal, engine
-from models import Base, Language, MentorProfile, ProgressLog, Session, User
+from models import Base, Language, MentorProfile, ProgressLog, Session, User, UserRole
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    raw_password = password.encode("utf-8")
+    return bcrypt.hashpw(raw_password[:72], bcrypt.gensalt()).decode("utf-8")
 
 
 def init_db() -> None:
@@ -34,14 +37,14 @@ def init_db() -> None:
         mentor_user = User(
             name="Kovacs Anna",
             email="anna.mentor@example.com",
-            hashed_password=pwd_context.hash("demo123"),
-            role="mentor",
+            hashed_password=hash_password("demo123"),
+            role=UserRole.mentor.value,
         )
         student_user = User(
             name="Nagy Peter",
             email="peter.student@example.com",
-            hashed_password=pwd_context.hash("demo123"),
-            role="student",
+            hashed_password=hash_password("demo123"),
+            role=UserRole.student.value,
             learning_language_id=english.id,
         )
         db.add_all([mentor_user, student_user])

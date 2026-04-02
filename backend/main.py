@@ -1,17 +1,17 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from database import engine, get_db
-from models import Base, Language, MentorProfile, ProgressLog, Session as StudySession, User
+from models import Base, Language, MentorProfile, ProgressLog, Session as StudySession, User, UserRole
 
 app = FastAPI(
     title="Nyelvcsere Backend API",
@@ -29,7 +29,6 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 SECRET_KEY = "change-this-secret-in-production"
@@ -37,7 +36,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 MAX_BCRYPT_PASSWORD_BYTES = 72
 ROLE_GUEST = "guest"
-ALLOWED_REGISTER_ROLES = {"student", "mentor"}
+ALLOWED_REGISTER_ROLES = {role.value for role in UserRole}
 
 
 class UserOut(BaseModel):
@@ -45,14 +44,14 @@ class UserOut(BaseModel):
     id: int
     name: str
     email: str
-    role: str
+    role: Literal["student", "mentor"]
     learning_language_id: Optional[int] = None
 
 class UserRegister(BaseModel):
     name: str
     email: str
     password: str
-    role: str = "student"
+    role: Literal["student", "mentor"] = "student"
     learning_language_id: Optional[int] = None
     offered_language_id: Optional[int] = None
     requested_language_id: Optional[int] = None
@@ -66,7 +65,7 @@ class UserUpdate(BaseModel):
 
 class CurrentUserOut(BaseModel):
     is_authenticated: bool
-    role: str
+    role: Literal["guest", "student", "mentor"]
     id: Optional[int] = None
     name: Optional[str] = None
     email: Optional[str] = None
@@ -180,9 +179,14 @@ def truncate_password_for_bcrypt(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     normalized_password = truncate_password_for_bcrypt(plain_password)
     try:
-        return pwd_context.verify(normalized_password, hashed_password)
+        return bcrypt.checkpw(normalized_password.encode("utf-8"), hashed_password.encode("utf-8"))
     except ValueError:
         return False
+
+
+def hash_password(password: str) -> str:
+    normalized_password = truncate_password_for_bcrypt(password)
+    return bcrypt.hashpw(normalized_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -243,6 +247,17 @@ def get_current_user_or_guest(
         raise credentials_exception
 
     return user
+
+
+def ensure_session_access(session: StudySession, current_user: User, db: Session) -> None:
+    if current_user.id == session.student_id:
+        return
+
+    mentor_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
+    if mentor_profile is not None and mentor_profile.id == session.mentor_profile_id:
+        return
+
+    raise HTTPException(status_code=403, detail="Not enough permissions for this session")
 
 
 def build_pairing_suggestions(db: Session) -> List[PairingSuggestionOut]:
@@ -855,6 +870,9 @@ def update_session(session_id: int, payload: SessionUpdate, db: Session = Depend
     db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    if db_session.student_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions for this session")
     
     if payload.scheduled_time:
         db_session.scheduled_time = payload.scheduled_time
@@ -870,6 +888,8 @@ def delete_session(session_id: int, db: Session = Depends(get_db), current_user:
     db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    ensure_session_access(db_session, current_user, db)
     
     db.delete(db_session)
     db.commit()

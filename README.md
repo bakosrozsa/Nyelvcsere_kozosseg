@@ -95,7 +95,7 @@ Nyelvcsere_kozosseg/
 - `name` (String)
 - `email` (String, unique)
 - `hashed_password` (String)
-- `role` (String: "student" | "mentor")
+- `role` (Enum-backed String column, constrained to "student" | "mentor")
 
 ### Language
 - `id` (Integer, PK)
@@ -118,9 +118,13 @@ Nyelvcsere_kozosseg/
 ### ProgressLog
 - `id` (Integer, PK)
 - `session_id` (Integer, FK → Session)
-- `student_id` (Integer, FK → User)
+- `student_id` (Integer, FK → User, duplicated from Session for direct ownership checks)
 - `notes` (String)
 - `rating` (Integer, 1-5)
+
+**Schema note:** `ProgressLog.student_id` is currently denormalized because the API reads and filters progress logs by ownership frequently. It can be removed in a future migration if the model is simplified.
+
+**Role note:** `User.role` is enforced by the SQLAlchemy model as a constrained enum with the only allowed values `student` and `mentor`. Existing databases are migrated on startup by rebuilding the `users` table if needed.
 
 ## Installation & Setup
 

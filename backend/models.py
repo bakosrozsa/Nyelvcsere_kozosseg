@@ -1,8 +1,15 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
+from enum import Enum as PyEnum
+
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Enum as SAEnum
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 
 Base = declarative_base()
+
+
+class UserRole(str, PyEnum):
+    student = "student"
+    mentor = "mentor"
 
 class User(Base):
     __tablename__ = "users"
@@ -11,7 +18,17 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(String, nullable=False)
+    role = Column(
+        SAEnum(
+            UserRole,
+            name="user_role",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+        ),
+        nullable=False,
+    )
     learning_language_id = Column(Integer, ForeignKey("languages.id"), nullable=True)
 
     mentor_profile = relationship("MentorProfile", back_populates="user", uselist=False)
