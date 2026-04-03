@@ -356,14 +356,14 @@ onMounted(() => {
 
 .page-header h2 {
   margin: 0;
-  color: #22354b;
+  color: #f1f5f9;
 }
 
 .refresh-btn {
   border: none;
   border-radius: 8px;
   padding: 8px 12px;
-  background: #1f67c8;
+  background: #4f46e5;
   color: #fff;
   font-weight: 600;
   cursor: pointer;
@@ -375,21 +375,21 @@ onMounted(() => {
 }
 
 .error {
-  background: #ffe2e2;
-  border: 1px solid #ffc9c9;
-  color: #8f1d1d;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
   padding: 10px 12px;
   border-radius: 8px;
 }
 
 .info {
-  color: #5a6775;
+  color: #cbd5e1;
 }
 
 .action-message {
-  background: #e6f7ea;
-  border: 1px solid #b8e7c4;
-  color: #135d2c;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
   padding: 10px 12px;
   border-radius: 8px;
   margin-bottom: 12px;
@@ -410,18 +410,25 @@ onMounted(() => {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  border: 1px solid #c9d6e5;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
   font-size: 0.95rem;
   outline: none;
+}
+
+.filter-input::placeholder,
+.booking-input::placeholder {
+  color: #cbd5e1;
 }
 
 .filter-input:focus,
 .filter-select:focus,
 .booking-input:focus {
-  border-color: #2f7de1;
-  box-shadow: 0 0 0 3px rgba(47, 125, 225, 0.12);
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 
 .grid {
@@ -431,18 +438,18 @@ onMounted(() => {
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #d9e2ec;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 6px 18px rgba(14, 29, 52, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 14px 28px rgba(14, 29, 52, 0.16);
-  border-color: #bfd3eb;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 .card-head {
@@ -456,24 +463,24 @@ onMounted(() => {
   width: 46px;
   height: 46px;
   border-radius: 999px;
-  border: 2px solid #d9e6f5;
-  background: #f5f9ff;
+  border: 2px solid rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.1);
 }
 
 .card h3 {
   margin: 0 0 6px;
-  color: #1d3247;
+  color: #f1f5f9;
 }
 
 .email {
   margin: 0 0 12px;
-  color: #5b6f83;
+  color: #cbd5e1;
   font-size: 0.95rem;
 }
 
 .meta p {
   margin: 6px 0;
-  color: #2d3f52;
+  color: #cbd5e1;
 }
 
 .card-actions {
@@ -482,9 +489,9 @@ onMounted(() => {
 
 .mentor-booking-disabled {
   margin: 0;
-  color: #6a3f00;
-  background: #fff3cd;
-  border: 1px solid #ffe69c;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.2);
   border-radius: 8px;
   padding: 9px 12px;
   font-size: 0.9rem;
@@ -500,7 +507,7 @@ onMounted(() => {
 }
 
 .book-btn {
-  background: #1f67c8;
+  background: #4f46e5;
   color: #ffffff;
 }
 
@@ -510,13 +517,13 @@ onMounted(() => {
   border-radius: 8px;
   padding: 9px 12px;
   font-weight: 600;
-  color: #1f67c8;
-  border: 1px dashed #8db2e4;
-  background: #f7fbff;
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .confirm-booking {
-  background: #1a7f45;
+  background: #22c55e;
   color: #ffffff;
 }
 
@@ -527,8 +534,8 @@ onMounted(() => {
 
 .booking-panel {
   margin-top: 12px;
-  background: #f7fbff;
-  border: 1px solid #dce9f7;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 10px;
   padding: 10px;
   display: grid;
@@ -538,7 +545,7 @@ onMounted(() => {
 .booking-label {
   font-size: 0.88rem;
   font-weight: 600;
-  color: #37506a;
+  color: #f1f5f9;
 }
 
 @media (max-width: 760px) {

@@ -92,22 +92,13 @@ const fetchProgressOverview = async (token) => {
   try {
     const [sessionsResponse, logsResponse, mentorProfilesResponse] = await Promise.all([
       fetch(`${API_BASE_URL}/sessions`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       }),
       fetch(`${API_BASE_URL}/progress-logs`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       }),
       fetch(`${API_BASE_URL}/mentor-profiles`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       }),
     ])
 
@@ -144,21 +135,13 @@ const fetchCurrentUser = async () => {
     const [meResponse, languagesResponse] = await Promise.all([
       fetch(`${API_BASE_URL}/users/me`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       }),
       fetch(`${API_BASE_URL}/languages`),
     ])
 
-    if (!meResponse.ok) {
-      throw new Error('Nem sikerült lekérni a profilt.')
-    }
-
-    if (!languagesResponse.ok) {
-      throw new Error('Nem sikerult lekerdezni a nyelveket.')
-    }
+    if (!meResponse.ok) throw new Error('Nem sikerült lekérni a profilt.')
+    if (!languagesResponse.ok) throw new Error('Nem sikerult lekerdezni a nyelveket.')
 
     const meData = await meResponse.json()
     languages.value = await languagesResponse.json()
@@ -176,15 +159,10 @@ const fetchCurrentUser = async () => {
     if (meData.role === 'mentor') {
       const mentorProfileResponse = await fetch(`${API_BASE_URL}/mentor-profile/me`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       })
 
-      if (!mentorProfileResponse.ok) {
-        throw new Error('Nem sikerult a mentor profil adatait lekerdezni.')
-      }
+      if (!mentorProfileResponse.ok) throw new Error('Nem sikerult a mentor profil adatait lekerdezni.')
 
       const mentorData = await mentorProfileResponse.json()
       mentorProfile.value = mentorData
@@ -201,9 +179,7 @@ const fetchCurrentUser = async () => {
 }
 
 const updateMentorLanguages = async () => {
-  if (!user.value || user.value.role !== 'mentor') {
-    return
-  }
+  if (!user.value || user.value.role !== 'mentor') return
 
   if (offeredLanguageId.value && requestedLanguageId.value) {
     if (Number(offeredLanguageId.value) === Number(requestedLanguageId.value)) {
@@ -216,17 +192,11 @@ const updateMentorLanguages = async () => {
   saveLoading.value = true
   try {
     const token = getToken()
-    if (!token) {
-      router.push({ name: 'Login' })
-      return
-    }
+    if (!token) { router.push({ name: 'Login' }); return }
 
     const response = await fetch(`${API_BASE_URL}/mentor-profile/me`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         offered_language_id: offeredLanguageId.value ? Number(offeredLanguageId.value) : null,
         requested_language_id: requestedLanguageId.value ? Number(requestedLanguageId.value) : null,
@@ -240,8 +210,7 @@ const updateMentorLanguages = async () => {
       throw new Error(data.detail || 'Nem sikerult menteni a mentor beallitasokat.')
     }
 
-    const data = await response.json()
-    mentorProfile.value = data
+    mentorProfile.value = await response.json()
     saveMessage.value = 'A mentor nyelvi beallitasok sikeresen frissultek.'
   } catch (err) {
     saveMessage.value = err.message || 'Hiba tortent mentes kozben.'
@@ -251,9 +220,7 @@ const updateMentorLanguages = async () => {
 }
 
 const updateStudentGoal = async () => {
-  if (!user.value || user.value.role !== 'student') {
-    return
-  }
+  if (!user.value || user.value.role !== 'student') return
 
   if (!learningLanguageId.value) {
     saveMessage.value = 'Kérlek, válassz egy tanulni kívánt nyelvet.'
@@ -264,20 +231,12 @@ const updateStudentGoal = async () => {
   saveLoading.value = true
   try {
     const token = getToken()
-    if (!token) {
-      router.push({ name: 'Login' })
-      return
-    }
+    if (!token) { router.push({ name: 'Login' }); return }
 
     const response = await fetch(`${API_BASE_URL}/users/me`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        learning_language_id: Number(learningLanguageId.value),
-      }),
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ learning_language_id: Number(learningLanguageId.value) }),
     })
 
     if (!response.ok) {
@@ -303,73 +262,86 @@ onMounted(() => {
 <template>
   <div class="profile">
     <div class="profile-shell">
-      <h2>Profil</h2>
-
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="loading" class="loading">Betöltés...</div>
 
-      <div v-if="user" class="profile-info">
-        <p><strong>Név:</strong> {{ user.name }}</p>
-        <p><strong>Email:</strong> {{ user.email }}</p>
-        <p><strong>Szerep:</strong> {{ user.role }}</p>
+      <div v-if="user" class="profile-card">
+        <div class="card-header">
+          <div class="avatar">{{ user.name?.charAt(0)?.toUpperCase() }}</div>
+          <div class="card-header-info">
+            <h2>{{ user.name }}</h2>
+            <p class="email">{{ user.email }}</p>
+            <span class="role-badge" :class="user.role">{{ user.role }}</span>
+          </div>
+        </div>
 
-        <form v-if="user.role === 'student'" class="mentor-form" @submit.prevent="updateStudentGoal">
+        <form v-if="user.role === 'student'" class="profile-form" @submit.prevent="updateStudentGoal">
           <h3>Tanulási cél</h3>
 
-          <label for="learningLanguage">Tanulni kívánt nyelv</label>
-          <select id="learningLanguage" v-model="learningLanguageId">
-            <option value="">Valassz nyelvet</option>
-            <option v-for="language in languages" :key="`student-${language.id}`" :value="String(language.id)">
-              {{ language.name }}
-            </option>
-          </select>
+          <div class="field-group">
+            <label for="learningLanguage">Tanulni kívánt nyelv</label>
+            <select id="learningLanguage" v-model="learningLanguageId" class="input">
+              <option value="">Válassz nyelvet</option>
+              <option v-for="language in languages" :key="`student-${language.id}`" :value="String(language.id)">
+                {{ language.name }}
+              </option>
+            </select>
+          </div>
 
-          <button type="submit" :disabled="saveLoading">
-            {{ saveLoading ? 'Mentes...' : 'Tanulási cél mentése' }}
+          <button type="submit" class="btn-primary" :disabled="saveLoading">
+            {{ saveLoading ? 'Mentés...' : 'Tanulási cél mentése' }}
           </button>
-
           <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
         </form>
 
-        <form v-if="user.role === 'mentor'" class="mentor-form" @submit.prevent="updateMentorLanguages">
-          <h3>Mentor nyelvi beallitasok</h3>
+        <form v-if="user.role === 'mentor'" class="profile-form" @submit.prevent="updateMentorLanguages">
+          <h3>Mentor nyelvi beállítások</h3>
 
-          <label for="offeredLanguage">Tanított nyelv</label>
-          <select id="offeredLanguage" v-model="offeredLanguageId">
-            <option value="">Valassz nyelvet</option>
-            <option v-for="language in languages" :key="language.id" :value="String(language.id)">
-              {{ language.name }}
-            </option>
-          </select>
+          <div class="field-group">
+            <label for="offeredLanguage">Tanított nyelv</label>
+            <select id="offeredLanguage" v-model="offeredLanguageId" class="input">
+              <option value="">Válassz nyelvet</option>
+              <option v-for="language in languages" :key="language.id" :value="String(language.id)">
+                {{ language.name }}
+              </option>
+            </select>
+          </div>
 
-          <label for="requestedLanguage">Tanulni vágyott nyelv</label>
-          <select id="requestedLanguage" v-model="requestedLanguageId">
-            <option value="">Valassz nyelvet</option>
-            <option v-for="language in getAvailableRequestedLanguages()" :key="`request-${language.id}`" :value="String(language.id)">
-              {{ language.name }}
-            </option>
-          </select>
+          <div class="field-group">
+            <label for="requestedLanguage">Tanulni vágyott nyelv</label>
+            <select id="requestedLanguage" v-model="requestedLanguageId" class="input">
+              <option value="">Válassz nyelvet</option>
+              <option v-for="language in getAvailableRequestedLanguages()" :key="`request-${language.id}`" :value="String(language.id)">
+                {{ language.name }}
+              </option>
+            </select>
+          </div>
 
-          <label for="availabilityDetails">Elérhetőség</label>
-          <textarea
-            id="availabilityDetails"
-            v-model="availabilityDetails"
-            rows="3"
-            placeholder="Pl.: Hetkoznap estenkent 18:00 utan"
-          />
+          <div class="field-group">
+            <label for="availabilityDetails">Elérhetőség</label>
+            <textarea
+              id="availabilityDetails"
+              v-model="availabilityDetails"
+              class="input"
+              rows="3"
+              placeholder="Pl.: Hétköznap esténként 18:00 után"
+            />
+          </div>
 
-          <label for="exchangeTerms">Csere feltételei</label>
-          <textarea
-            id="exchangeTerms"
-            v-model="exchangeTerms"
-            rows="3"
-            placeholder="Pl.: EN-HU nyelvpar, heti minimum 1 alkalom"
-          />
+          <div class="field-group">
+            <label for="exchangeTerms">Csere feltételei</label>
+            <textarea
+              id="exchangeTerms"
+              v-model="exchangeTerms"
+              class="input"
+              rows="3"
+              placeholder="Pl.: EN-HU nyelvpár, heti minimum 1 alkalom"
+            />
+          </div>
 
-          <button type="submit" :disabled="saveLoading">
-            {{ saveLoading ? 'Mentes...' : 'Mentor nyelvek mentese' }}
+          <button type="submit" class="btn-primary" :disabled="saveLoading">
+            {{ saveLoading ? 'Mentés...' : 'Mentor nyelvek mentése' }}
           </button>
-
           <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
         </form>
 
@@ -394,17 +366,19 @@ onMounted(() => {
               </div>
               <div class="stat-card">
                 <span class="stat-label">Átlag</span>
-                <strong>{{ filteredProgressStats.averageRating ? `${filteredProgressStats.averageRating}/5` : '-' }}</strong>
+                <strong>{{ filteredProgressStats.averageRating ? `${filteredProgressStats.averageRating}/5` : '–' }}</strong>
               </div>
             </div>
 
-            <label for="progressLanguageFilter" class="progress-filter-label">Szűrés tanult nyelv szerint</label>
-            <select id="progressLanguageFilter" v-model="progressLanguageFilter" class="progress-filter-select">
-              <option value="all">Minden tanult nyelv</option>
-              <option v-for="language in availableProgressLanguages" :key="`progress-${language.id}`" :value="language.id">
-                {{ language.name }}
-              </option>
-            </select>
+            <div class="field-group">
+              <label for="progressLanguageFilter">Szűrés tanult nyelv szerint</label>
+              <select id="progressLanguageFilter" v-model="progressLanguageFilter" class="input">
+                <option value="all">Minden tanult nyelv</option>
+                <option v-for="language in availableProgressLanguages" :key="`progress-${language.id}`" :value="language.id">
+                  {{ language.name }}
+                </option>
+              </select>
+            </div>
 
             <p v-if="filteredProgressEntries.length === 0" class="progress-empty">Még nincs megjeleníthető előrehaladási adat.</p>
 
@@ -426,25 +400,24 @@ onMounted(() => {
 
 <style scoped>
 .profile {
-  padding: 20px;
+  padding: 40px 20px;
   display: flex;
   justify-content: center;
 }
 
 .profile-shell {
   width: 100%;
-  max-width: 640px;
-}
-
-.profile h2 {
-  color: #2c3e50;
+  max-width: 540px;
 }
 
 .error {
   color: #b42318;
-  background: #f8d7da;
-  padding: 12px;
-  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.92rem;
 }
 
 .loading {
@@ -453,144 +426,219 @@ onMounted(() => {
   padding: 40px;
 }
 
-.profile-info {
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  max-width: 500px;
+/* Main card */
+.profile-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-.profile-info p {
-  margin: 12px 0;
+/* Card header with avatar */
+.card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding-bottom: 22px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.mentor-form {
-  margin-top: 20px;
-  border-top: 1px solid #e3e3e3;
-  padding-top: 16px;
-  display: grid;
-  gap: 10px;
+.avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1f67c8, #3b86e8);
+  color: white;
+  font-size: 1.4rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.mentor-form h3 {
+.card-header-info h2 {
+  margin: 0 0 2px;
+  font-size: 1.15rem;
+  color: #f1f5f9;
+}
+
+.card-header-info .email {
   margin: 0 0 6px;
-  color: #2c3e50;
+  font-size: 0.85rem;
+  color: #cbd5e1;
 }
 
-.mentor-form label {
+.role-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.role-badge.mentor { background: rgba(99, 102, 241, 0.25); color: #818cf8; }
+.role-badge.student { background: rgba(34, 197, 94, 0.25); color: #86efac; }
+
+/* Form sections */
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profile-form h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: #f1f5f9;
+  font-weight: 700;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  font-size: 0.93rem;
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.06);
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.7);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+textarea.input {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.btn-primary {
+  padding: 10px 16px;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 8px;
   font-size: 0.92rem;
   font-weight: 600;
-  color: #324a62;
-}
-
-.mentor-form select,
-.mentor-form textarea,
-.mentor-form button {
-  border: 1px solid #cfd9e3;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 0.95rem;
-}
-
-.mentor-form textarea {
-  resize: vertical;
-  min-height: 72px;
-}
-
-.mentor-form button {
-  border: none;
-  background: #1f67c8;
-  color: white;
   cursor: pointer;
-  font-weight: 600;
+  transition: opacity 0.2s, box-shadow 0.2s;
+  margin-top: 4px;
 }
-
-.mentor-form button:disabled {
-  opacity: 0.7;
-  cursor: wait;
-}
+.btn-primary:hover { opacity: 0.88; box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .save-message {
-  margin: 2px 0 0;
-  color: #135d2c;
-  font-size: 0.92rem;
+  margin: 0;
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.88rem;
 }
 
+/* Progress section */
 .progress-section {
-  margin-top: 22px;
-  border-top: 1px solid #e3e3e3;
-  padding-top: 16px;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .progress-section h3 {
-  margin: 0 0 10px;
-  color: #2c3e50;
+  margin: 0 0 14px;
+  font-size: 1rem;
+  color: #f1f5f9;
+  font-weight: 700;
 }
 
 .progress-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .stat-card {
-  border: 1px solid #d6e0eb;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #f8fbff;
-  display: grid;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(99, 102, 241, 0.08);
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
 .stat-label {
-  color: #516476;
-  font-size: 0.85rem;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-card strong {
+  font-size: 1.4rem;
+  color: #f1f5f9;
 }
 
 .progress-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-}
-
-.progress-filter-label {
-  display: block;
-  margin: 6px 0;
-  font-size: 0.9rem;
-  color: #324a62;
-  font-weight: 600;
-}
-
-.progress-filter-select {
-  width: 100%;
-  border: 1px solid #cfd9e3;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 0.95rem;
-  margin-bottom: 12px;
+  margin-top: 14px;
 }
 
 .progress-item {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #ffffff;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .progress-item p {
-  margin: 6px 0;
+  margin: 5px 0;
+  font-size: 0.9rem;
+  color: #cbd5e1;
 }
 
 .progress-empty {
-  color: #5f6e7d;
-  margin: 8px 0 0;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  margin: 10px 0 0;
 }
 
 .progress-error {
-  color: #b42318;
-  background: #f8d7da;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
+  font-size: 0.9rem;
 }
 </style>

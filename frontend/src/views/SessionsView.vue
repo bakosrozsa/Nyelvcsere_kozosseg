@@ -582,32 +582,36 @@ onMounted(() => {
             >
               <h5>{{ student.student_name }}</h5>
 
-              <div v-if="evaluationForms[session.id]?.[student.student_id]">
-                <label :for="`rating-${session.id}-${student.student_id}`">Értékelés (1-5)</label>
-                <select
-                  :id="`rating-${session.id}-${student.student_id}`"
-                  v-model="evaluationForms[session.id][student.student_id].rating"
-                  class="input"
-                >
-                  <option value="">Nincs értékelés</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5">5</option>
-                </select>
+              <div v-if="evaluationForms[session.id]?.[student.student_id]" class="evaluation-fields">
+                <div class="field-group">
+                  <label :for="`rating-${session.id}-${student.student_id}`">Értékelés (1–5)</label>
+                  <select
+                    :id="`rating-${session.id}-${student.student_id}`"
+                    v-model="evaluationForms[session.id][student.student_id].rating"
+                    class="input"
+                  >
+                    <option value="">Nincs értékelés</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                </div>
 
-                <label :for="`notes-${session.id}-${student.student_id}`">Megjegyzés</label>
-                <textarea
-                  :id="`notes-${session.id}-${student.student_id}`"
-                  v-model="evaluationForms[session.id][student.student_id].notes"
-                  class="input notes-input"
-                  rows="3"
-                  placeholder="Mit gyakoroltatok, miben fejlődött a tanuló?"
-                />
+                <div class="field-group">
+                  <label :for="`notes-${session.id}-${student.student_id}`">Megjegyzés</label>
+                  <textarea
+                    :id="`notes-${session.id}-${student.student_id}`"
+                    v-model="evaluationForms[session.id][student.student_id].notes"
+                    class="input notes-input"
+                    rows="3"
+                    placeholder="Mit gyakoroltatok, miben fejlődött a tanuló?"
+                  />
+                </div>
 
                 <button
-                  class="btn btn-primary"
+                  class="btn btn-primary btn-save"
                   :disabled="evaluationSaving[`${session.id}:${student.student_id}`]"
                   @click="saveStudentEvaluation(session, student)"
                 >
@@ -652,46 +656,121 @@ onMounted(() => {
 
 <style scoped>
 .sessions-page { padding: 20px; max-width: 900px; margin: 0 auto; }
-h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+h2 { color: #f1f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 10px; }
 
 .error-box { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
 
-.create-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
-.group-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
+.create-box { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); margin-bottom: 30px; }
+.group-box { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); margin-bottom: 30px; }
 .inline-form { display: flex; gap: 15px; align-items: flex-end; }
-.input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+.input { padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.92rem; width: 100%; box-sizing: border-box; }
+.input:focus { outline: none; border-color: #1f67c8; box-shadow: 0 0 0 3px rgba(31, 103, 200, 0.12); }
 
 .group-list { display: grid; gap: 10px; }
-.group-item { border: 1px solid #d8e3f4; border-radius: 8px; padding: 10px 12px; background: #f8fbff; }
-.group-item p { margin: 6px 0; }
+.group-item { border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 10px 12px; background: rgba(99, 102, 241, 0.08); }
+.group-item p { margin: 6px 0; color: #f1f5f9; }
 
-.participants-box { margin-top: 10px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f9fbfe; text-align: left; }
-.participants-box h4 { margin: 0; font-size: 0.95rem; }
+.participants-box { margin-top: 10px; padding: 10px; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; background: rgba(99, 102, 241, 0.08); text-align: left; }
+.participants-box h4 { margin: 0; font-size: 0.95rem; color: #f1f5f9; }
 .participants-list { margin: 8px 0 0; padding-left: 18px; }
 .student-feedback-box { margin-top: 10px; }
 
-.session-card { background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; }
+.session-card { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; }
 .session-info { width: 100%; }
-.session-info p { margin: 5px 0; }
-.progress-editor { margin-top: 12px; padding: 10px; background: #f6f9ff; border: 1px solid #d8e3f4; border-radius: 8px; display: grid; gap: 8px; }
-.student-evaluation-card { border: 1px solid #dce6f6; border-radius: 8px; background: #fff; padding: 10px; display: grid; gap: 8px; text-align: left; }
-.student-evaluation-card h5 { margin: 0; }
-.time-editor { margin-top: 12px; padding: 10px; background: #f7f7fb; border: 1px solid #e1e1ef; border-radius: 8px; display: grid; gap: 8px; }
-.progress-editor h4 { margin: 0 0 2px; color: #2c3e50; font-size: 0.95rem; }
-.time-editor h4 { margin: 0 0 2px; color: #2c3e50; font-size: 0.95rem; }
-.notes-input { resize: vertical; min-height: 72px; }
+.session-info p { margin: 5px 0; color: #cbd5e1; }
+
+/* Progress / evaluation editor */
+.progress-editor {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 10px;
+}
+.progress-editor h4 {
+  margin: 0 0 12px;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+}
+
+/* Individual student evaluation card */
+.student-evaluation-card {
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.08);
+  padding: 14px 16px;
+  margin-top: 10px;
+  text-align: left;
+}
+.student-evaluation-card h5 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  color: #f1f5f9;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.25);
+  padding-bottom: 8px;
+}
+
+/* Stacked fields layout */
+.evaluation-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field-group label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.field-group select.input {
+  max-width: 180px;
+}
+
+.notes-input {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.btn-save {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* Time editor */
+.time-editor {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+.time-editor h4 { margin: 0 0 2px; color: #f1f5f9; font-size: 0.95rem; }
+.time-editor label { font-size: 0.82rem; font-weight: 600; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.04em; }
 
 .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 0.85rem; font-weight: bold; }
-.status-badge.scheduled { background: #cce5ff; color: #004085; }
-.status-badge.completed { background: #d4edda; color: #155724; }
-.status-badge.canceled { background: #fff3cd; color: #856404; }
+.status-badge.scheduled { background: rgba(99, 102, 241, 0.25); color: #818cf8; }
+.status-badge.completed { background: rgba(34, 197, 94, 0.25); color: #86efac; }
+.status-badge.canceled { background: rgba(251, 146, 60, 0.25); color: #fdba74; }
 
 .session-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; }
-.btn:hover { opacity: 0.8; }
+.btn { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.88rem; transition: opacity 0.2s, box-shadow 0.2s; }
+.btn:hover { opacity: 0.85; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: #1f67c8; color: white; }
-.btn-success { background: #28a745; color: white; }
-.btn-warning { background: #ffc107; color: #212529; }
-.btn-danger { background: #dc3545; color: white; }
+.btn-primary { background: #4f46e5; color: white; }
+.btn-success { background: #22c55e; color: white; }
+.btn-warning { background: #f59e0b; color: white; }
+.btn-danger { background: #ef4444; color: white; }
 </style>

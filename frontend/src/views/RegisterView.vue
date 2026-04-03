@@ -22,9 +22,7 @@ const API_BASE_URL = 'http://127.0.0.1:8000'
 const fetchLanguages = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/languages`)
-    if (!response.ok) {
-      throw new Error('Nem sikerult a nyelveket betolteni.')
-    }
+    if (!response.ok) throw new Error('Nem sikerult a nyelveket betolteni.')
     languages.value = await response.json()
   } catch (err) {
     error.value = err?.message || 'Hiba tortent a nyelvek lekerese soran.'
@@ -32,9 +30,7 @@ const fetchLanguages = async () => {
 }
 
 const getAvailableRequestedLanguages = () => {
-  if (!offeredLanguageId.value) {
-    return languages.value
-  }
+  if (!offeredLanguageId.value) return languages.value
   return languages.value.filter((lang) => String(lang.id) !== String(offeredLanguageId.value))
 }
 
@@ -81,9 +77,7 @@ const handleRegister = async () => {
 
     const response = await fetch(`${API_BASE_URL}/register`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
 
@@ -106,113 +100,106 @@ onMounted(fetchLanguages)
 <template>
   <div class="register-page">
     <div class="register-card">
+      <div class="card-icon">🌐</div>
       <h1>Regisztráció</h1>
       <p class="subtitle">Csatlakozz a Nyelvcsere közösséghez.</p>
 
       <form class="register-form" @submit.prevent="handleRegister">
-        <label class="label" for="name">Név</label>
-        <input
-          id="name"
-          v-model="name"
-          class="input"
-          type="text"
-          placeholder="Teljes név"
-          required
-        />
+        <div class="field-group">
+          <label class="label" for="name">Név</label>
+          <input id="name" v-model="name" class="input" type="text" placeholder="Teljes név" required />
+        </div>
 
-        <label class="label" for="email">Email</label>
-        <input
-          id="email"
-          v-model="email"
-          class="input"
-          type="email"
-          placeholder="pelda@email.com"
-          required
-        />
+        <div class="field-group">
+          <label class="label" for="email">Email</label>
+          <input id="email" v-model="email" class="input" type="email" placeholder="pelda@email.com" required />
+        </div>
 
-        <label class="label" for="role">Szerep</label>
-        <select v-model="role" class="input">
-          <option value="student">Diák</option>
-          <option value="mentor">Mentor</option>
-        </select>
+        <div class="field-group">
+          <label class="label" for="role">Szerep</label>
+          <select id="role" v-model="role" class="input">
+            <option value="student">Diák</option>
+            <option value="mentor">Mentor</option>
+          </select>
+        </div>
 
         <template v-if="role === 'student'">
-          <label class="label" for="learningLanguage">Tanulni kívánt nyelv</label>
-          <select id="learningLanguage" v-model="learningLanguageId" class="input" required>
-            <option value="">Valassz nyelvet</option>
-            <option v-for="language in languages" :key="`learning-${language.id}`" :value="language.id">
-              {{ language.name }}
-            </option>
-          </select>
+          <div class="field-group">
+            <label class="label" for="learningLanguage">Tanulni kívánt nyelv</label>
+            <select id="learningLanguage" v-model="learningLanguageId" class="input" required>
+              <option value="">Válassz nyelvet</option>
+              <option v-for="language in languages" :key="`learning-${language.id}`" :value="language.id">
+                {{ language.name }}
+              </option>
+            </select>
+          </div>
         </template>
 
         <template v-if="role === 'mentor'">
-          <label class="label" for="offeredLanguage">Tanított nyelv</label>
-          <select id="offeredLanguage" v-model="offeredLanguageId" class="input">
-            <option value="">Valassz nyelvet</option>
-            <option v-for="language in languages" :key="language.id" :value="language.id">
-              {{ language.name }}
-            </option>
-          </select>
+          <div class="field-group">
+            <label class="label" for="offeredLanguage">Tanított nyelv</label>
+            <select id="offeredLanguage" v-model="offeredLanguageId" class="input">
+              <option value="">Válassz nyelvet</option>
+              <option v-for="language in languages" :key="language.id" :value="language.id">
+                {{ language.name }}
+              </option>
+            </select>
+          </div>
 
-          <label class="label" for="requestedLanguage">Tanulni vágyott nyelv</label>
-          <select id="requestedLanguage" v-model="requestedLanguageId" class="input">
-            <option value="">Valassz nyelvet</option>
-            <option v-for="language in getAvailableRequestedLanguages()" :key="`requested-${language.id}`" :value="language.id">
-              {{ language.name }}
-            </option>
-          </select>
+          <div class="field-group">
+            <label class="label" for="requestedLanguage">Tanulni vágyott nyelv</label>
+            <select id="requestedLanguage" v-model="requestedLanguageId" class="input">
+              <option value="">Válassz nyelvet</option>
+              <option v-for="language in getAvailableRequestedLanguages()" :key="`requested-${language.id}`" :value="language.id">
+                {{ language.name }}
+              </option>
+            </select>
+          </div>
 
-          <label class="label" for="availabilityDetails">Elérhetőség</label>
-          <textarea
-            id="availabilityDetails"
-            v-model="availabilityDetails"
-            class="input textarea"
-            rows="3"
-            placeholder="Pl.: Hetkoznap estenkent 18:00 utan, szombat delelott"
-          />
+          <div class="field-group">
+            <label class="label" for="availabilityDetails">Elérhetőség</label>
+            <textarea
+              id="availabilityDetails"
+              v-model="availabilityDetails"
+              class="input textarea"
+              rows="3"
+              placeholder="Pl.: Hétköznap esténként 18:00 után"
+            />
+          </div>
 
-          <label class="label" for="exchangeTerms">Csere feltételei</label>
-          <textarea
-            id="exchangeTerms"
-            v-model="exchangeTerms"
-            class="input textarea"
-            rows="3"
-            placeholder="Pl.: EN-HU nyelvpar, legalabb heti 1 alkalom, 60 perc"
-          />
+          <div class="field-group">
+            <label class="label" for="exchangeTerms">Csere feltételei</label>
+            <textarea
+              id="exchangeTerms"
+              v-model="exchangeTerms"
+              class="input textarea"
+              rows="3"
+              placeholder="Pl.: EN-HU nyelvpár, legalább heti 1 alkalom"
+            />
+          </div>
         </template>
 
-        <label class="label" for="password">Jelszó</label>
-        <input
-          id="password"
-          v-model="password"
-          class="input"
-          type="password"
-          placeholder="••••••••"
-          required
-        />
+        <div class="field-group">
+          <label class="label" for="password">Jelszó</label>
+          <input id="password" v-model="password" class="input" type="password" placeholder="••••••••" required />
+        </div>
 
-        <label class="label" for="confirmPassword">Jelszó megerősítése</label>
-        <input
-          id="confirmPassword"
-          v-model="confirmPassword"
-          class="input"
-          type="password"
-          placeholder="••••••••"
-          required
-        />
+        <div class="field-group">
+          <label class="label" for="confirmPassword">Jelszó megerősítése</label>
+          <input id="confirmPassword" v-model="confirmPassword" class="input" type="password" placeholder="••••••••" required />
+        </div>
 
         <p v-if="error" class="error">{{ error }}</p>
 
         <button class="submit" type="submit" :disabled="loading">
           {{ loading ? 'Regisztrálás...' : 'Regisztrálás' }}
         </button>
-
-        <p class="login-link">
-          Már van fiókod?
-          <router-link to="/login">Jelentkezz be!</router-link>
-        </p>
       </form>
+
+      <p class="switch-link">
+        Már van fiókod?
+        <router-link to="/login">Jelentkezz be!</router-link>
+      </p>
     </div>
   </div>
 </template>
@@ -222,101 +209,160 @@ onMounted(fetchLanguages)
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
-  background: linear-gradient(145deg, #f3f7fb 0%, #e7eef8 100%);
+  padding: 32px 24px;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 60% 85%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+    linear-gradient(135deg, #0f1623 0%, #161d2e 50%, #0f1420 100%);
 }
 
 .register-card {
   width: 100%;
   max-width: 420px;
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 28px;
-  box-shadow: 0 14px 40px rgba(14, 29, 52, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 36px 32px;
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(20px);
+  text-align: center;
+}
+
+.card-icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  display: block;
 }
 
 h1 {
   margin: 0;
   font-size: 1.75rem;
-  color: #11233a;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.5px;
 }
 
 .subtitle {
-  margin: 8px 0 20px;
-  color: #4d627b;
+  margin: 8px 0 24px;
+  color: #94a3b8;
+  font-size: 0.93rem;
 }
 
 .register-form {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  text-align: left;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .label {
-  font-size: 0.9rem;
-  color: #2c3f59;
+  font-size: 0.78rem;
   font-weight: 600;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .input {
-  border: 1px solid #c7d3e0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 1rem;
+  padding: 10px 13px;
+  font-size: 0.93rem;
+  color: #f1f5f9;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.input::placeholder {
+  color: #475569;
 }
 
 .input:focus {
-  border-color: #2f7de1;
-  box-shadow: 0 0 0 3px rgba(47, 125, 225, 0.15);
+  border-color: rgba(99, 102, 241, 0.7);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+/* Style native select options (best effort — OS dependent) */
+.input option {
+  background: #1e2130;
+  color: #f1f5f9;
 }
 
 .textarea {
   resize: vertical;
-  min-height: 72px;
+  min-height: 76px;
 }
 
 .error {
-  margin: 4px 0;
-  color: #b42318;
-  font-size: 0.9rem;
+  margin: 0;
+  color: #f87171;
+  font-size: 0.88rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  text-align: left;
 }
 
 .submit {
-  margin-top: 8px;
+  margin-top: 4px;
   border: none;
   border-radius: 10px;
-  padding: 11px 14px;
-  font-size: 1rem;
+  padding: 12px 14px;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #ffffff;
-  background: #1f67c8;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  letter-spacing: 0.02em;
+  font-family: inherit;
 }
 
 .submit:hover:not(:disabled) {
-  background: #1653a2;
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(99, 102, 241, 0.45);
+}
+
+.submit:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .submit:disabled {
-  opacity: 0.7;
+  opacity: 0.55;
   cursor: wait;
 }
 
-.login-link {
+.switch-link {
+  margin-top: 20px;
+  color: #64748b;
+  font-size: 0.88rem;
   text-align: center;
-  margin-top: 16px;
-  color: #666;
 }
 
-.login-link a {
-  color: #2f7de1;
-  text-decoration: none;
+.switch-link a {
+  color: #818cf8;
   font-weight: 600;
+  text-decoration: none;
 }
 
-.login-link a:hover {
+.switch-link a:hover {
+  color: #a5b4fc;
   text-decoration: underline;
 }
 </style>

@@ -71,6 +71,11 @@ const handleLogout = () => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  min-height: 100vh;
+}
+
+main {
+  backdrop-filter: blur(10px);
 }
 
 .app-header {
@@ -80,22 +85,56 @@ const handleLogout = () => {
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
-  padding-bottom: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
+  backdrop-filter: blur(15px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
 .app-title {
   margin: 0;
-  color: #2c3e50;
+  color: #f1f5f9;
   font-size: clamp(1.2rem, 2.4vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
 .app-nav {
   display: flex;
-  gap: 15px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.app-nav a {
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.app-nav a:hover {
+  color: #f1f5f9;
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.app-nav a.router-link-active {
+  color: #818cf8;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.logout-btn {
+  color: #f87171 !important;
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
 }
 
 .app-nav a {

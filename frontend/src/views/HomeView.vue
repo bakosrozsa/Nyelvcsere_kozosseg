@@ -70,15 +70,15 @@ onMounted(() => {
 }
 
 .hero {
-  background: linear-gradient(140deg, #f8fbff 0%, #ecf3ff 100%);
-  border: 1px solid #d8e4f3;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 16px;
   padding: 26px;
 }
 
 .eyebrow {
   margin: 0;
-  color: #2f6fb8;
+  color: #818cf8;
   font-weight: 700;
   font-size: 0.9rem;
   letter-spacing: 0.03em;
@@ -87,14 +87,14 @@ onMounted(() => {
 
 .hero h2 {
   margin: 8px 0 12px;
-  color: #132941;
+  color: #f1f5f9;
   font-size: clamp(1.4rem, 3.2vw, 2rem);
   line-height: 1.25;
 }
 
 .lead {
   margin: 0 auto;
-  color: #44596f;
+  color: #cbd5e1;
   line-height: 1.6;
   max-width: 70ch;
   text-align: center;
@@ -121,15 +121,15 @@ onMounted(() => {
 }
 
 .btn.primary {
-  background: #1f67c8;
+  background: #4f46e5;
   color: #ffffff;
-  box-shadow: 0 6px 14px rgba(31, 103, 200, 0.24);
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.24);
 }
 
 .btn.ghost {
-  background: #ffffff;
-  color: #1f67c8;
-  border: 1px solid #8db2e4;
+  background: rgba(79, 70, 229, 0.1);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
 .stats-grid {
@@ -139,34 +139,34 @@ onMounted(() => {
 }
 
 .stat-card {
-  background: #ffffff;
-  border: 1px solid #dde6f1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 16px;
 }
 
 .stat-card h3 {
   margin: 0 0 8px;
-  color: #1e354d;
+  color: #f1f5f9;
   font-size: 1.05rem;
 }
 
 .stat-card p {
   margin: 0;
-  color: #4f6378;
+  color: #cbd5e1;
   line-height: 1.5;
 }
 
 .info-panel {
-  border: 1px solid #dde6f1;
-  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   padding: 24px;
 }
 
 .info-panel h3 {
   margin: 0 0 16px;
-  color: #1e354d;
+  color: #f1f5f9;
   text-align: center;
 }
 
@@ -177,10 +177,10 @@ onMounted(() => {
 }
 
 .step-card {
-  border: 1px solid #dbe6f3;
+  border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 10px;
   padding: 14px;
-  background: #f8fbff;
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .step-index {
@@ -190,7 +190,7 @@ onMounted(() => {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: #1f67c8;
+  background: #4f46e5;
   color: #ffffff;
   font-weight: 700;
   margin-bottom: 8px;
@@ -198,7 +198,7 @@ onMounted(() => {
 
 .step-card p {
   margin: 0;
-  color: #4f6378;
+  color: #cbd5e1;
   line-height: 1.5;
 }
 

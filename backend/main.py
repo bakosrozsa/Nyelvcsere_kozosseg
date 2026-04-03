@@ -341,6 +341,8 @@ def build_pairing_suggestions(db: Session) -> List[PairingSuggestionOut]:
         for user in users:
             if user.id == mentor_user.id:
                 continue
+            if user.role != "student":
+                continue
             if user.learning_language_id is None:
                 continue
 
