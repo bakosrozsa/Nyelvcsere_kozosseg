@@ -68,7 +68,7 @@ const filteredProgressStats = computed(() => {
   }
 })
 
-const buildProgressState = (sessionsData, progressLogsData, mentorProfilesData) => {
+const buildProgressState = (sessionsData, progressLogsData, mentorProfilesData, evaluationsBySessionId = new Map()) => {
   const progressBySessionId = new Map(progressLogsData.map((log) => [log.session_id, log]))
   const mentorProfileById = new Map(mentorProfilesData.map((profile) => [profile.id, profile]))
   const languageNameById = new Map(languages.value.map((lang) => [lang.id, lang.name]))
@@ -76,7 +76,7 @@ const buildProgressState = (sessionsData, progressLogsData, mentorProfilesData) 
   const entries = sessionsData
     .map((session) => ({
       session,
-      progress: progressBySessionId.get(session.id) || null,
+      progress: progressBySessionId.get(session.id) || evaluationsBySessionId.get(session.id) || null,
       languageId: mentorProfileById.get(session.mentor_profile_id)?.offered_language_id ?? null,
       languageName: languageNameById.get(mentorProfileById.get(session.mentor_profile_id)?.offered_language_id) || 'Nincs megadva',
     }))
@@ -90,11 +90,8 @@ const fetchProgressOverview = async (token) => {
   progressError.value = ''
 
   try {
-    const [sessionsResponse, logsResponse, mentorProfilesResponse] = await Promise.all([
+    const [sessionsResponse, mentorProfilesResponse] = await Promise.all([
       fetch(`${API_BASE_URL}/sessions`, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      }),
-      fetch(`${API_BASE_URL}/progress-logs`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       }),
       fetch(`${API_BASE_URL}/mentor-profiles`, {
@@ -102,17 +99,48 @@ const fetchProgressOverview = async (token) => {
       }),
     ])
 
-    if (!sessionsResponse.ok || !logsResponse.ok || !mentorProfilesResponse.ok) {
+    if (!sessionsResponse.ok || !mentorProfilesResponse.ok) {
       throw new Error('Nem sikerült betölteni az előrehaladás adatait.')
     }
 
-    const [sessionsData, progressLogsData, mentorProfilesData] = await Promise.all([
-      sessionsResponse.json(),
-      logsResponse.json(),
-      mentorProfilesResponse.json(),
-    ])
+    const [sessionsData, mentorProfilesData] = await Promise.all([sessionsResponse.json(), mentorProfilesResponse.json()])
 
-    buildProgressState(sessionsData, progressLogsData, mentorProfilesData)
+    let progressLogsData = []
+    try {
+      const logsResponse = await fetch(`${API_BASE_URL}/progress-logs`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+      if (logsResponse.ok) {
+        progressLogsData = await logsResponse.json()
+      }
+    } catch {
+      progressLogsData = []
+    }
+
+    const evaluationResults = await Promise.all(
+      sessionsData.map(async (session) => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/sessions/${session.id}/evaluations`, {
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          })
+          if (!response.ok) {
+            return [session.id, null]
+          }
+
+          const evaluations = await response.json()
+          const currentStudentEvaluation = evaluations.find(
+            (evaluation) => String(evaluation.student_id) === String(user.value?.id)
+          )
+          return [session.id, currentStudentEvaluation || evaluations?.[0] || null]
+        } catch {
+          return [session.id, null]
+        }
+      })
+    )
+
+    const evaluationsBySessionId = new Map(evaluationResults)
+
+    buildProgressState(sessionsData, progressLogsData, mentorProfilesData, evaluationsBySessionId)
   } catch (err) {
     progressError.value = err.message || 'Hiba történt az előrehaladás betöltésekor.'
   } finally {

@@ -1,307 +1,141 @@
-# Nyelvcsere Közösség - Language Exchange Platform
+# Nyelvcsere Közösség
 
-A modern full-stack web application for connecting language mentors and students, enabling peer-to-peer language learning through structured sessions.
+Nyelvcsere platform mentoroknak és tanulóknak, FastAPI backenddel és Vue 3 front-enddel.
 
-## Project Status 🚀
+## Állapot
 
-**Last Updated:** April 1, 2026
+**Last updated:** April 3, 2026
 
-### Current Features ✅
+Fő funkciók:
+- JWT alapú autentikáció és jogosultságkezelés (`student`, `mentor`)
+- Vendég mód: mentorlista megtekinthető bejelentkezés nélkül
+- Mentor profil kezelés (tanított/tanult nyelv, időtartam, elérhetőség, cserefeltételek)
+- 1:1 és csoportos foglalkozások
+- Csoportos foglalkozás korlát: `max_students` csak 2 és 10 között
+- Csoportos csatlakozás és lejelentkezés
+- Session státuszkezelés (`scheduled`, `completed`, `canceled`)
+- Haladási napló (`rating`, `notes`) és foglalkozás utáni értékelési folyamat
+- Mentor oldali párosítási javaslatok (csak diákokra)
+- Dashboard: felhasználók, párosítások, erőforrások
+- App-szintű sötét/glassmorphism UI téma (konzisztens kártya stílusok)
 
-#### Core Platform
-- ✅ **User Authentication:** JWT-based login/registration with bcrypt password hashing
-- ✅ **Guest Support:** Browse mentors and home page without authentication; booking requires login
-- ✅ **Responsive Design:** Mobile-friendly UI with breakpoints for 820px, 760px, 520px screens
-- ✅ **Role-Based Access:** Student and Mentor roles with different capabilities
-
-#### Mentor System
-- ✅ **Mentor Profiles:** Create and manage mentor language pairs (taught/learned languages)
-- ✅ **Mentor Listing:** Search mentors by name, filter by language
-- ✅ **Avatar Generation:** Automatic visual profiles using Dicebear API
-- ✅ **Hover Effects:** Interactive card animations for better UX
-- ✅ **Past-Time Blocking:** Prevent booking sessions in the past
-
-#### Session Management
-- ✅ **Session CRUD:** Create, read, update, and delete booking sessions
-- ✅ **Status Tracking:** Sessions can be scheduled, completed, or canceled
-- ✅ **Mentor Name Selector:** User-friendly dropdown instead of numeric IDs
-- ✅ **Date/Time Validation:** Client-side validation prevents past bookings
-
-#### Admin Features
-- ✅ **User Dashboard:** View all platform users with role badges and avatars
-- ✅ **Language Management:** Curated language list (English, Hungarian, German)
-- ✅ **Demo Data:** Pre-seeded demo users for testing
-
-### Pending Features 🚧
-
-- 🔄 **Email Verification:** Email confirmation for new registrations
-- 🔄 **Refresh Tokens:** Extended session support with token refresh mechanism
-- 🔄 **Rate Limiting:** API rate limiting for abuse prevention
-- 🔄 **Session Scheduling Validation:** Advanced conflict detection
-- 🔄 **Progress Logging:** Track student progress across sessions
-
-## Tech Stack
-
-### Frontend
-- **Framework:** Vue 3 with Composition API
-- **Router:** Vue Router 4
-- **HTTP Client:** Axios
-- **Styling:** CSS3 (Grid/Flexbox)
-- **Dev Server:** Vite (port 5173)
+## Tech stack
 
 ### Backend
-- **Framework:** FastAPI
-- **ORM:** SQLAlchemy
-- **Database:** SQLite
-- **Authentication:** JWT (python-jose, passlib)
-- **Password Hashing:** bcrypt
-- **CORS:** CORSMiddleware for cross-origin requests
-- **Server:** Uvicorn (port 8000)
+- FastAPI
+- SQLAlchemy
+- SQLite
+- JWT (`python-jose`), bcrypt (`passlib`)
+- Uvicorn
 
-## Project Structure
+### Frontend
+- Vue 3 (Composition API)
+- Vue Router
+- Vite
+- CSS (custom dark theme)
 
-```
+## Projekt struktúra
+
+```text
 Nyelvcsere_kozosseg/
 ├── backend/
-│   ├── main.py              # FastAPI application, all routes
-│   ├── models.py            # SQLAlchemy ORM models
-│   ├── database.py          # SQLite session factory
-│   ├── init_db.py           # Demo data initialization
-│   └── requirements.txt     # Python dependencies
+│   ├── database.py
+│   ├── init_db.py
+│   ├── main.py
+│   └── models.py
 ├── frontend/
-│   ├── src/
-│   │   ├── App.vue          # Root component with responsive header
-│   │   ├── router/
-│   │   │   └── index.js     # Route definitions and auth guards
-│   │   └── views/
-│   │       ├── HomeView.vue          # Landing page
-│   │       ├── LoginView.vue         # Authentication
-│   │       ├── RegisterView.vue      # User registration
-│   │       ├── ProfileView.vue       # User profile & mentor settings
-│   │       ├── MentorsView.vue       # Mentor listing & booking
-│   │       ├── DashboardView.vue     # User administration
-│   │       └── SessionsView.vue      # Session management
 │   ├── package.json
-│   └── vite.config.js
-├── docs/                    # Documentation
-├── prompts/                 # Agent customizations
-└── README.md               # This file
+│   ├── vite.config.js
+│   ├── index.html
+│   └── src/
+│       ├── App.vue
+│       ├── main.js
+│       ├── style.css
+│       ├── router/index.js
+│       └── views/
+│           ├── HomeView.vue
+│           ├── LoginView.vue
+│           ├── RegisterView.vue
+│           ├── DashboardView.vue
+│           ├── MentorsView.vue
+│           ├── SessionsView.vue
+│           ├── ProfileView.vue
+│           └── NotFoundView.vue
+└── README.md
 ```
 
-## Database Schema
+## Gyors indítás
 
-### User
-- `id` (Integer, PK)
-- `name` (String)
-- `email` (String, unique)
-- `hashed_password` (String)
-- `role` (Enum-backed String column, constrained to "student" | "mentor")
+### 1. Backend
 
-### Language
-- `id` (Integer, PK)
-- `name` (String, unique)
-
-### MentorProfile
-- `id` (Integer, PK)
-- `user_id` (Integer, FK → User)
-- `offered_language_id` (Integer, FK → Language)
-- `requested_language_id` (Integer, FK → Language)
-- `session_length_minutes` (Integer, default: 60)
-
-### Session
-- `id` (Integer, PK)
-- `student_id` (Integer, FK → User)
-- `mentor_profile_id` (Integer, FK → MentorProfile)
-- `scheduled_time` (DateTime)
-- `status` (String: "scheduled" | "completed" | "canceled")
-
-### ProgressLog
-- `id` (Integer, PK)
-- `session_id` (Integer, FK → Session)
-- `student_id` (Integer, FK → User, duplicated from Session for direct ownership checks)
-- `notes` (String)
-- `rating` (Integer, 1-5)
-
-**Schema note:** `ProgressLog.student_id` is currently denormalized because the API reads and filters progress logs by ownership frequently. It can be removed in a future migration if the model is simplified.
-
-**Role note:** `User.role` is enforced by the SQLAlchemy model as a constrained enum with the only allowed values `student` and `mentor`. Existing databases are migrated on startup by rebuilding the `users` table if needed.
-
-## Installation & Setup
-
-### Prerequisites
-- Python 3.9+
-- Node.js 16+
-- npm or yarn
-
-### Backend Setup
-
-1. **Navigate to backend directory:**
-   ```bash
-   cd backend
-   ```
-
-2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/Scripts/activate  # Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Initialize database (includes demo data):**
-   ```bash
-   python init_db.py
-   ```
-
-   This creates `database.db` with:
-   - Languages: English, Hungarian, German
-   - Demo Mentor: `anna.mentor@example.com` / `demo123`
-   - Demo Student: `peter.student@example.com` / `demo123`
-
-5. **Start the backend server:**
-   ```bash
-   uvicorn main:app --reload
-   ```
-   Server runs at `http://127.0.0.1:8000`
-
-### Frontend Setup
-
-1. **Navigate to frontend directory:**
-   ```bash
-   cd frontend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-   App runs at `http://localhost:5173`
-
-4. **Build for production:**
-   ```bash
-   npm run build
-   ```
-
-## Running the Application
-
-1. **Terminal 1 - Backend:**
-   ```bash
-   cd backend && venv\Scripts\activate && uvicorn main:app --reload
-   ```
-
-2. **Terminal 2 - Frontend:**
-   ```bash
-   cd frontend && npm run dev
-   ```
-
-3. **Access the app:** Open `http://localhost:5173` in your browser
-
-## API Endpoints Summary
-
-### Authentication
-- `POST /register` - Register new user
-- `POST /login` - Login and receive JWT token
-- `GET /users/me` - Get current user profile (includes `is_authenticated` flag for guests)
-
-### User Management
-- `GET /users` - List all users
-- `GET /users/{user_id}` - Get user by ID
-
-### Mentor Profiles
-- `GET /mentor-profiles` - List all mentor profiles
-- `POST /mentor-profile/me` - Create mentor profile (for current user)
-- `PUT /mentor-profile/me` - Update mentor profile (target languages)
-- `GET /users/{user_id}/mentor-profile` - Get mentor info for user
-
-### Sessions
-- `POST /sessions` - Create new session (requires auth)
-- `GET /sessions` - List all sessions (current user's sessions if not admin)
-- `GET /sessions/{session_id}` - Get session details
-- `PUT /sessions/{session_id}/status` - Update session status
-- `DELETE /sessions/{session_id}` - Cancel session
-
-### Languages
-- `GET /languages` - List available languages
-
-## Demo Credentials
-
-After initialization, use these credentials to test:
-
-| Role | Email | Password |
-|------|-------|----------|
-| Mentor | `anna.mentor@example.com` | `demo123` |
-| Student | `peter.student@example.com` | `demo123` |
-
-**Note:** Passwords are bcrypt-hashed. First login may require database reset:
 ```bash
-# Delete existing database
-rm database.db  # or del database.db on Windows
-# Restart backend to reinitialize
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python init_db.py
+uvicorn main:app --reload
 ```
 
-## Frontend Routes
+Backend URL: `http://127.0.0.1:8000`
 
-| Route | Protected | Description |
-|-------|-----------|-------------|
-| `/` | ❌ | Home page with hero and feature overview |
-| `/login` | ❌ | User login page |
-| `/register` | ❌ | User registration page |
-| `/mentors` | ⚠️ | Mentor listing (guest-friendly, booking requires auth) |
-| `/profile` | ✅ | User profile and mentor settings |
-| `/sessions` | ✅ | Session management (CRUD) |
-| `/dashboard` | ✅ | User administration |
+### 2. Frontend
 
-**Legend:** ✅ = Requires authentication | ⚠️ = Partially protected | ❌ = Public
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Key Features Deep Dive
+Frontend URL: `http://localhost:5173`
 
-### Guest Access
-- Non-authenticated users can view the home page and mentor listing
-- Booking buttons display login prompts for guests
-- Token stored in `localStorage` as `access_token`
+## API összefoglaló
 
-### Responsive Design
-- Mobile breakpoints at 820px and 520px
-- Flex/Grid layouts adapt to screen size
-- Header navigation collapses on smaller screens
+### Auth és felhasználók
+- `POST /register`
+- `POST /login`
+- `GET /token-check`
+- `GET /users`
+- `GET /users/me`
+- `PUT /users/me`
+- `GET /users/{user_id}`
 
-### Session Validation
-- Frontend prevents past-date selection via `<input type="datetime-local" :min="minDateTime">`
-- Backend validates session times before creation
-- Alert messages guide users to valid time slots
+### Nyelvek és mentor profilok
+- `GET /languages`
+- `GET /mentor-profiles`
+- `GET /mentor-profile/me`
+- `PUT /mentor-profile/me`
 
-### Mentor Name Selection
-- Sessions CRUD uses human-readable mentor names instead of profile IDs
-- Dropdown populated from `GET /mentor-profiles` endpoint
-- Selected mentor name displayed in session cards
+### Párosítás és erőforrások
+- `GET /pairing-suggestions`
+- `GET /mentor-pairing-groups`
+- `GET /mentor-resources`
+- `GET /community-interactions`
 
-## Known Issues & Limitations
+### Foglalkozások
+- `GET /sessions`
+- `POST /sessions`
+- `PUT /sessions/{session_id}`
+- `DELETE /sessions/{session_id}`
+- `GET /sessions/group-available`
+- `POST /sessions/{session_id}/join`
+- `DELETE /sessions/{session_id}/leave`
+- `GET /sessions/{session_id}/participants`
+- `GET /sessions/{session_id}/progress-log`
+- `PUT /sessions/{session_id}/progress-log`
+- `GET /sessions/{session_id}/evaluations`
+- `PUT /sessions/{session_id}/evaluations/{student_id}`
 
-1. **Token Key Inconsistency:** Some code paths reference both `token` and `access_token` from localStorage _(Medium Priority)_
-2. **No Email Verification:** Registrations accepted without email confirmation _(Low Priority)_
-3. **No Concurrent Session Limits:** Mentors can theoretically have unlimited overlapping sessions _(Medium Priority)_
-4. **SQLite Limitation:** Not suitable for production multi-concurrent access _(Migrate to PostgreSQL for production)_
+## Frontend route-ok
 
-## Contributing
+- `/` - Kezdőoldal
+- `/login` - Bejelentkezés
+- `/register` - Regisztráció
+- `/mentors` - Mentorlista
+- `/profile` - Profil
+- `/sessions` - Foglalkozások
+- `/dashboard` - Dashboard
 
-When adding features:
-1. Update both backend (FastAPI) and frontend (Vue 3) changes
-2. Run demo data initialization: `python backend/init_db.py`
-3. Test with demo credentials
-4. Update this README with new routes/features
+## Megjegyzés
 
-## License
-
-This project is created for the Nyelvcsere Közösség language exchange community.
-
----
-
-**Last Updated:** April 1, 2026 | **Status:** Fully Functional with Responsive UI & Authentication
+`init_db.py` futtatása újraépíti a demo adatbázist. Ha teljes reset kell, töröld a `backend/database.db` fájlt és futtasd újra az initet.

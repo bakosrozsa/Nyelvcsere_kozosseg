@@ -175,40 +175,44 @@ const fetchSessionDetailsForSessions = async () => {
 
   await Promise.all(
     sessions.value.map(async (session) => {
-      try {
-        const [participantsRes, evaluationsRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/sessions/${session.id}/participants`, { headers: getHeaders() }),
-          axios.get(`${API_BASE_URL}/sessions/${session.id}/evaluations`, { headers: getHeaders() }),
-        ])
+      const requests = [
+        axios.get(`${API_BASE_URL}/sessions/${session.id}/participants`, { headers: getHeaders() }),
+        axios.get(`${API_BASE_URL}/sessions/${session.id}/evaluations`, { headers: getHeaders() }),
+      ]
 
-        const participants = participantsRes.data || []
-        const evaluations = evaluationsRes.data || []
-        nextParticipants[session.id] = participants
-        nextEvaluations[session.id] = evaluations
+      if (!isMentor.value) {
+        requests.push(axios.get(`${API_BASE_URL}/sessions/${session.id}/progress-log`, { headers: getHeaders() }))
+      }
 
-        if (isMentor.value) {
-          const formMap = {}
-          participants.forEach((participant) => {
-            const existing = evaluations.find((evaluation) => evaluation.student_id === participant.student_id)
-            formMap[participant.student_id] = {
-              notes: existing?.notes || '',
-              rating: existing?.rating ? String(existing.rating) : '',
-            }
-          })
-          nextForms[session.id] = formMap
-        }
+      const requestResults = await Promise.allSettled(requests)
+      const participantsResult = requestResults[0]
+      const evaluationsResult = requestResults[1]
+      const progressLogResult = requestResults[2]
 
-        if (!isMentor.value) {
-          const myEvaluation = evaluations.find(
-            (evaluation) => String(evaluation.student_id) === String(currentUser.value?.id)
-          ) || null
-          nextMyEvaluations[session.id] = myEvaluation
-        }
-      } catch (err) {
-        nextParticipants[session.id] = []
-        nextEvaluations[session.id] = []
-        nextForms[session.id] = {}
-        nextMyEvaluations[session.id] = null
+      const participants = participantsResult.status === 'fulfilled' ? (participantsResult.value.data || []) : []
+      const evaluations = evaluationsResult.status === 'fulfilled' ? (evaluationsResult.value.data || []) : []
+      const progressLog = progressLogResult?.status === 'fulfilled' ? (progressLogResult.value.data || null) : null
+
+      nextParticipants[session.id] = participants
+      nextEvaluations[session.id] = evaluations
+
+      if (isMentor.value) {
+        const formMap = {}
+        participants.forEach((participant) => {
+          const existing = evaluations.find((evaluation) => evaluation.student_id === participant.student_id)
+          formMap[participant.student_id] = {
+            notes: existing?.notes || '',
+            rating: existing?.rating ? String(existing.rating) : '',
+          }
+        })
+        nextForms[session.id] = formMap
+      }
+
+      if (!isMentor.value) {
+        const myEvaluation = evaluations.find(
+          (evaluation) => String(evaluation.student_id) === String(currentUser.value?.id)
+        ) || progressLog || null
+        nextMyEvaluations[session.id] = myEvaluation
       }
     })
   )

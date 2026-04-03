@@ -175,7 +175,7 @@ class ProgressLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     session_id: int
-    student_id: int
+    student_id: Optional[int]
     notes: Optional[str]
     rating: Optional[int]
 
@@ -1040,7 +1040,8 @@ def leave_group_session(
 
 @app.get("/progress-logs", response_model=List[ProgressLogOut])
 def list_progress_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[ProgressLog]:
-    query = db.query(ProgressLog)
+    # Defensive filter for legacy/incomplete rows that would fail response validation.
+    query = db.query(ProgressLog).filter(ProgressLog.session_id.isnot(None))
     if current_user.role == "student":
         direct_logs = query.filter(ProgressLog.student_id == current_user.id).all()
         joined_session_ids = [
