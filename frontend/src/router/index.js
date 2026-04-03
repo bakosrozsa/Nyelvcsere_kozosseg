@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
+import { shouldRedirectFromAuthPages, shouldRedirectToLogin } from '../utils/authGuards'
 
 const routes = [
   {
@@ -59,15 +60,23 @@ const router = createRouter({
 
 router.beforeEach((to, from) => {
   const isAuthenticated = !!localStorage.getItem('token')
+  const redirectToLogin = shouldRedirectToLogin({
+    requiresAuth: !!to.meta.requiresAuth,
+    isAuthenticated,
+    redirectPath: to.fullPath,
+  })
+  if (redirectToLogin) {
+    return redirectToLogin
+  }
 
-  if (to.meta.requiresAuth && !isAuthenticated) {
-    return { name: 'Login', query: { redirect: to.fullPath } }
-  } 
-  
-  if ((to.name === 'Login' || to.name === 'Register') && isAuthenticated) {
-    return { name: 'Dashboard' }
-  } 
-  
+  const redirectFromAuthPages = shouldRedirectFromAuthPages({
+    routeName: to.name,
+    isAuthenticated,
+  })
+  if (redirectFromAuthPages) {
+    return redirectFromAuthPages
+  }
+
   return true
 })
 

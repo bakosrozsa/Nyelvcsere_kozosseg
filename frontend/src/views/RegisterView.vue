@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { API_BASE_URL } from '../config/api'
 
 const router = useRouter()
 const name = ref('')
@@ -16,8 +17,6 @@ const exchangeTerms = ref('')
 const languages = ref([])
 const loading = ref(false)
 const error = ref('')
-
-const API_BASE_URL = 'http://127.0.0.1:8000'
 
 const fetchLanguages = async () => {
   try {

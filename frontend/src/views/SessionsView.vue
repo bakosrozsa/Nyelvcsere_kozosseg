@@ -1,8 +1,8 @@
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
 import axios from 'axios'
+import { API_BASE_URL } from '../config/api'
 
-const API_BASE_URL = 'http://127.0.0.1:8000'
 const sessions = ref([])
 const mentors = ref([])
 const currentUser = ref(null)
@@ -99,7 +99,7 @@ const fetchMentors = async () => {
     const headers = getHeaders()
     const [profilesRes, usersRes, languagesRes] = await Promise.all([
       axios.get(`${API_BASE_URL}/mentor-profiles`, { headers }),
-      axios.get(`${API_BASE_URL}/users`, { headers }),
+      axios.get(`${API_BASE_URL}/public/mentor-users`, { headers }),
       axios.get(`${API_BASE_URL}/languages`, { headers }),
     ])
 

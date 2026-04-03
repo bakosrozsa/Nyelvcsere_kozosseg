@@ -72,10 +72,13 @@ Nyelvcsere_kozosseg/
 cd backend
 python -m venv venv
 venv\Scripts\activate
+set NYELVCSERE_SECRET_KEY=replace-with-a-long-random-secret
 pip install -r requirements.txt
 python init_db.py
 uvicorn main:app --reload
 ```
+
+Tipp: a `backend/.env.example` fájl mintát ad a szükséges környezeti változókhoz.
 
 Backend URL: `http://127.0.0.1:8000`
 
@@ -87,7 +90,21 @@ npm install
 npm run dev
 ```
 
+Frontend fejlesztéshez ajánlott Node verzió: `22.12.0` (minimum: `20.19.0`).
+
+Ha nem alapértelmezett backend címet használsz, hozz létre `frontend/.env` fájlt a `frontend/.env.example` alapján, és állítsd be a `VITE_API_BASE_URL` értékét.
+
 Frontend URL: `http://localhost:5173`
+
+## Tesztelés
+
+Backend smoke tesztek futtatása:
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest -q
+```
 
 ## API összefoglaló
 
@@ -95,10 +112,11 @@ Frontend URL: `http://localhost:5173`
 - `POST /register`
 - `POST /login`
 - `GET /token-check`
-- `GET /users`
+- `GET /users` (mentor: teljes lista, student: saját profil)
 - `GET /users/me`
 - `PUT /users/me`
 - `GET /users/{user_id}`
+- `GET /public/mentor-users` (vendég módban is elérhető mentorlista adat)
 
 ### Nyelvek és mentor profilok
 - `GET /languages`
@@ -138,4 +156,4 @@ Frontend URL: `http://localhost:5173`
 
 ## Megjegyzés
 
-`init_db.py` futtatása újraépíti a demo adatbázist. Ha teljes reset kell, töröld a `backend/database.db` fájlt és futtasd újra az initet.
+`init_db.py` futtatása újraépíti a demo adatbázist. Ha teljes reset kell, töröld a `backend/nyelvcsere.db` fájlt és futtasd újra az initet.

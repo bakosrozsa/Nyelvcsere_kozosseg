@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import os
 from typing import List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -31,7 +32,10 @@ Base.metadata.create_all(bind=engine)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-SECRET_KEY = "change-this-secret-in-production"
+SECRET_KEY = os.getenv("NYELVCSERE_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("NYELVCSERE_SECRET_KEY environment variable is required")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 MAX_BCRYPT_PASSWORD_BYTES = 72
@@ -46,6 +50,13 @@ class UserOut(BaseModel):
     email: str
     role: Literal["student", "mentor"]
     learning_language_id: Optional[int] = None
+
+
+class PublicMentorUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    email: str
 
 class UserRegister(BaseModel):
     name: str
@@ -588,10 +599,23 @@ def token_check(token: str = Query(..., description="JWT token to validate")) ->
 def list_users(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[User]:
     sync_mentor_learning_goals(db)
-    return db.query(User).offset(skip).limit(limit).all()
+
+    if current_user.role == "mentor":
+        return db.query(User).offset(skip).limit(limit).all()
+
+    if current_user.role == "student":
+        return [current_user]
+
+    raise HTTPException(status_code=403, detail="Only mentors and students can access user list")
+
+
+@app.get("/public/mentor-users", response_model=List[PublicMentorUserOut])
+def list_public_mentor_users(db: Session = Depends(get_db)) -> List[User]:
+    return db.query(User).filter(User.role == "mentor").all()
 
 @app.get("/users/me", response_model=CurrentUserOut)
 def read_current_user(
@@ -654,16 +678,17 @@ def pairing_suggestions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[PairingSuggestionOut]:
+    if current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Only mentors can access pairing suggestions")
+
     suggestions = build_pairing_suggestions(db)
-    if current_user.role == "mentor":
-        current_user_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
-        if current_user_profile:
-            suggestions = [
-                suggestion
-                for suggestion in suggestions
-                if suggestion.mentor_profile_id == current_user_profile.id
-                or suggestion.student_id == current_user.id
-            ]
+    current_user_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
+    if current_user_profile:
+        suggestions = [
+            suggestion
+            for suggestion in suggestions
+            if suggestion.mentor_profile_id == current_user_profile.id
+        ]
     return suggestions
 
 
@@ -680,61 +705,6 @@ def mentor_pairing_groups(
     return groups
 
 
-@app.get("/pairing-suggestions", response_model=List[PairingSuggestionOut])
-def list_pairing_suggestions(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[dict]:
-    if current_user.role not in {"mentor"}:
-        raise HTTPException(status_code=403, detail="Only mentors can access pairing suggestions")
-
-    languages = {language.id: language.name for language in db.query(Language).all()}
-    students = db.query(User).filter(User.role == "student").all()
-    mentor_profiles = db.query(MentorProfile).all()
-
-    suggestions_with_score: List[tuple[int, dict]] = []
-    for student in students:
-        if student.learning_language_id is None:
-            continue
-        for mentor_profile in mentor_profiles:
-            if mentor_profile.offered_language_id != student.learning_language_id:
-                continue
-
-            mentor = db.query(User).filter(User.id == mentor_profile.user_id).first()
-            if mentor is None:
-                continue
-
-            availability_bonus = 1 if mentor_profile.availability_details else 0
-            exchange_terms_bonus = 1 if mentor_profile.exchange_terms else 0
-            score = 100 + availability_bonus + exchange_terms_bonus
-
-            suggestions_with_score.append(
-                (
-                    score,
-                    {
-                        "student_id": student.id,
-                        "student_name": student.name,
-                        "student_email": student.email,
-                        "learning_language_id": student.learning_language_id,
-                        "learning_language_name": languages.get(student.learning_language_id),
-                        "mentor_profile_id": mentor_profile.id,
-                        "mentor_name": mentor.name,
-                        "mentor_email": mentor.email,
-                        "mentor_language_id": mentor_profile.offered_language_id,
-                        "mentor_language_name": languages.get(mentor_profile.offered_language_id),
-                        "mentor_availability_details": mentor_profile.availability_details,
-                        "mentor_exchange_terms": mentor_profile.exchange_terms,
-                        "match_reason": "Nyelvi cél egyezés"
-                        + (" + elérhetőség" if mentor_profile.availability_details else "")
-                        + (" + cserefeltételek" if mentor_profile.exchange_terms else ""),
-                    },
-                )
-            )
-
-    suggestions_with_score.sort(key=lambda item: item[0], reverse=True)
-    return [item[1] for item in suggestions_with_score]
-
-
 @app.get("/mentor-resources", response_model=List[ResourceOut])
 def list_mentor_resources(current_user: User = Depends(get_current_user)) -> List[dict]:
     if current_user.role not in {"mentor"}:
@@ -744,17 +714,17 @@ def list_mentor_resources(current_user: User = Depends(get_current_user)) -> Lis
         {
             "title": "Párosítási útmutató",
             "description": "Tippek a nyelvi célok alapján történő párosításhoz és az optimális cserealkalmak kiválasztásához.",
-            "url": "https://example.com/pairing-guide",
+            "url": "https://www.coe.int/en/web/common-european-framework-reference-languages",
         },
         {
             "title": "Beszélgetési sablonok",
             "description": "Ötletek a kezdő és haladó nyelvi cserealkalmakhoz.",
-            "url": "https://example.com/conversation-templates",
+            "url": "https://learnenglish.britishcouncil.org/skills/speaking",
         },
         {
             "title": "Közösségi irányelvek",
             "description": "Útmutató a biztonságos és tiszteletteljes közösségi interakciókhoz.",
-            "url": "https://example.com/community-guidelines",
+            "url": "https://www.unesco.org/en/internet-trust/safety-guidelines",
         },
     ]
 
