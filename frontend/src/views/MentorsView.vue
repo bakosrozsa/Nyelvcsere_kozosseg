@@ -69,6 +69,8 @@ const filteredMentors = computed(() => {
   })
 })
 
+const canBookMentor = computed(() => isAuthenticated.value && currentUser.value?.role !== 'mentor')
+
 const fetchMentors = async () => {
   loading.value = true
   error.value = ''
@@ -166,6 +168,11 @@ const fetchCurrentUser = async () => {
 }
 
 const toggleBooking = (mentorId) => {
+  if (currentUser.value?.role === 'mentor') {
+    actionMessage.value = 'Mentorkent nem foglalhatsz idopontot, csak a hozzad foglaltakat kezelheted.'
+    return
+  }
+
   if (!isAuthenticated.value) {
     actionMessage.value = 'A foglalashoz jelentkezz be.'
     return
@@ -183,6 +190,11 @@ const toggleBooking = (mentorId) => {
 const handleBooking = async (mentor) => {
   actionMessage.value = ''
   syncAuthState()
+
+  if (currentUser.value?.role === 'mentor') {
+    actionMessage.value = 'Mentorkent nem foglalhatsz idopontot, csak a hozzad foglaltakat kezelheted.'
+    return
+  }
 
   const token = getStoredToken()
   if (!token) {
@@ -301,15 +313,18 @@ onMounted(() => {
         </div>
 
         <div class="card-actions">
-          <button v-if="isAuthenticated" class="book-btn" @click="toggleBooking(mentor.id)">
+          <button v-if="canBookMentor" class="book-btn" @click="toggleBooking(mentor.id)">
             {{ selectedMentorId === mentor.id ? 'Mégse' : 'Foglalás' }}
           </button>
+          <p v-else-if="isAuthenticated && currentUser?.role === 'mentor'" class="mentor-booking-disabled">
+            Mentorkent itt nem foglalhatsz idopontot.
+          </p>
           <router-link v-else class="guest-book-link" :to="{ name: 'Login', query: { redirect: '/mentors' } }">
             Bejelentkezes a foglalashoz
           </router-link>
         </div>
 
-        <div v-if="isAuthenticated && selectedMentorId === mentor.id" class="booking-panel">
+        <div v-if="canBookMentor && selectedMentorId === mentor.id" class="booking-panel">
           <label class="booking-label" :for="`booking-${mentor.id}`">Valassz idopontot</label>
           <input
             :id="`booking-${mentor.id}`"
@@ -463,6 +478,16 @@ onMounted(() => {
 
 .card-actions {
   margin-top: 12px;
+}
+
+.mentor-booking-disabled {
+  margin: 0;
+  color: #6a3f00;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 0.9rem;
 }
 
 .book-btn,

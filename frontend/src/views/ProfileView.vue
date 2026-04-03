@@ -165,7 +165,13 @@ const fetchCurrentUser = async () => {
     user.value = meData
     learningLanguageId.value = meData.learning_language_id ? String(meData.learning_language_id) : ''
 
-    await fetchProgressOverview(token)
+    if (meData.role === 'student') {
+      await fetchProgressOverview(token)
+    } else {
+      progressEntries.value = []
+      progressError.value = ''
+      progressLoading.value = false
+    }
 
     if (meData.role === 'mentor') {
       const mentorProfileResponse = await fetch(`${API_BASE_URL}/mentor-profile/me`, {
@@ -367,7 +373,7 @@ onMounted(() => {
           <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
         </form>
 
-        <section class="progress-section">
+        <section v-if="user.role === 'student'" class="progress-section">
           <h3>Előrehaladás</h3>
 
           <div v-if="progressError" class="progress-error">{{ progressError }}</div>

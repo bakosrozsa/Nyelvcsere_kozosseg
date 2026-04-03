@@ -1,6 +1,6 @@
 from enum import Enum as PyEnum
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Enum as SAEnum, Boolean, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 
@@ -71,14 +71,29 @@ class Session(Base):
     __tablename__ = "sessions"
     
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("users.id"))
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     mentor_profile_id = Column(Integer, ForeignKey("mentor_profiles.id"))
     scheduled_time = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="scheduled")
+    is_group = Column(Boolean, default=False, nullable=False)
+    max_students = Column(Integer, nullable=True)
 
     student = relationship("User", back_populates="sessions_as_student")
     mentor_profile = relationship("MentorProfile", back_populates="sessions")
     progress_log = relationship("ProgressLog", back_populates="session", uselist=False)
+    participants = relationship("SessionParticipant", back_populates="session", cascade="all, delete-orphan")
+
+
+class SessionParticipant(Base):
+    __tablename__ = "session_participants"
+    __table_args__ = (UniqueConstraint("session_id", "student_id", name="uq_session_participant"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    session = relationship("Session", back_populates="participants")
+    student = relationship("User")
 
 class ProgressLog(Base):
     __tablename__ = "progress_logs"
@@ -91,3 +106,17 @@ class ProgressLog(Base):
 
     session = relationship("Session", back_populates="progress_log")
     student = relationship("User", back_populates="progress_logs")
+
+
+class SessionEvaluation(Base):
+    __tablename__ = "session_evaluations"
+    __table_args__ = (UniqueConstraint("session_id", "student_id", name="uq_session_student_evaluation"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    notes = Column(Text, nullable=True)
+    rating = Column(Integer, nullable=True)
+
+    session = relationship("Session")
+    student = relationship("User")

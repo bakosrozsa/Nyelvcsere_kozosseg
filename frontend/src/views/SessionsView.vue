@@ -9,14 +9,21 @@ const currentUser = ref(null)
 const loading = ref(false)
 const error = ref('')
 const minDateTime = ref('')
-const progressBySession = ref({})
-const progressForms = ref({})
-const progressSaving = ref({})
+const participantsBySession = ref({})
+const evaluationsBySession = ref({})
+const evaluationForms = ref({})
+const evaluationSaving = ref({})
+const myEvaluationBySession = ref({})
 const sessionTimeForms = ref({})
+const availableGroupSessions = ref([])
+const groupLoading = ref(false)
+const joiningGroup = ref({})
+const leavingGroup = ref({})
 
 const newSession = ref({
   mentor_profile_id: '',
   scheduled_time: '',
+  max_students: '',
 })
 
 const mentorByProfileId = computed(() => {
@@ -36,6 +43,12 @@ const visibleMentors = computed(() => {
 })
 
 const isMentor = computed(() => currentUser.value?.role === 'mentor')
+const ownMentorProfile = computed(() => {
+  if (!currentUser.value) {
+    return null
+  }
+  return mentors.value.find((mentor) => String(mentor.userId) === String(currentUser.value.id)) || null
+})
 
 const getCurrentDateTimeLocal = () => {
   const now = new Date()
@@ -127,7 +140,7 @@ const fetchSessions = async () => {
       acc[session.id] = toDateTimeLocalValue(session.scheduled_time)
       return acc
     }, {})
-    await fetchProgressLogsForSessions()
+    await fetchSessionDetailsForSessions()
   } catch (err) {
     error.value = 'Hiba a foglalkozások lekérésekor.'
     console.error(err)
@@ -136,36 +149,98 @@ const fetchSessions = async () => {
   }
 }
 
-const fetchProgressLogsForSessions = async () => {
-  const nextProgress = {}
+const fetchAvailableGroupSessions = async () => {
+  if (currentUser.value?.role !== 'student') {
+    availableGroupSessions.value = []
+    return
+  }
+
+  groupLoading.value = true
+  try {
+    const response = await axios.get(`${API_BASE_URL}/sessions/group-available`, { headers: getHeaders() })
+    availableGroupSessions.value = response.data
+  } catch (err) {
+    console.error(err)
+    availableGroupSessions.value = []
+  } finally {
+    groupLoading.value = false
+  }
+}
+
+const fetchSessionDetailsForSessions = async () => {
+  const nextParticipants = {}
+  const nextEvaluations = {}
   const nextForms = {}
+  const nextMyEvaluations = {}
 
   await Promise.all(
     sessions.value.map(async (session) => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/sessions/${session.id}/progress-log`, {
-          headers: getHeaders(),
-        })
-        const progress = response.data
-        nextProgress[session.id] = progress
-        nextForms[session.id] = {
-          notes: progress?.notes || '',
-          rating: progress?.rating ? String(progress.rating) : '',
+        const [participantsRes, evaluationsRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/sessions/${session.id}/participants`, { headers: getHeaders() }),
+          axios.get(`${API_BASE_URL}/sessions/${session.id}/evaluations`, { headers: getHeaders() }),
+        ])
+
+        const participants = participantsRes.data || []
+        const evaluations = evaluationsRes.data || []
+        nextParticipants[session.id] = participants
+        nextEvaluations[session.id] = evaluations
+
+        if (isMentor.value) {
+          const formMap = {}
+          participants.forEach((participant) => {
+            const existing = evaluations.find((evaluation) => evaluation.student_id === participant.student_id)
+            formMap[participant.student_id] = {
+              notes: existing?.notes || '',
+              rating: existing?.rating ? String(existing.rating) : '',
+            }
+          })
+          nextForms[session.id] = formMap
+        }
+
+        if (!isMentor.value) {
+          const myEvaluation = evaluations.find(
+            (evaluation) => String(evaluation.student_id) === String(currentUser.value?.id)
+          ) || null
+          nextMyEvaluations[session.id] = myEvaluation
         }
       } catch (err) {
-        nextProgress[session.id] = null
-        nextForms[session.id] = { notes: '', rating: '' }
+        nextParticipants[session.id] = []
+        nextEvaluations[session.id] = []
+        nextForms[session.id] = {}
+        nextMyEvaluations[session.id] = null
       }
     })
   )
 
-  progressBySession.value = nextProgress
-  progressForms.value = nextForms
+  participantsBySession.value = nextParticipants
+  evaluationsBySession.value = nextEvaluations
+  evaluationForms.value = nextForms
+  myEvaluationBySession.value = nextMyEvaluations
 }
 
 const canRateSession = (session) => session?.status === 'completed'
 const canWriteNotes = (session) => session?.status === 'completed'
 const canShowFeedbackSummary = (session) => isMentor.value || session?.status !== 'canceled'
+const participantsCount = (sessionId) => participantsBySession.value[sessionId]?.length || 0
+const canStudentDeleteSession = (session) => {
+  if (currentUser.value?.role !== 'student') {
+    return false
+  }
+  return session?.status === 'scheduled' && !session?.is_group && String(session?.student_id) === String(currentUser.value.id)
+}
+const canStudentLeaveGroup = (session) => {
+  if (currentUser.value?.role !== 'student') {
+    return false
+  }
+  if (session?.status !== 'scheduled' || !session?.is_group) {
+    return false
+  }
+  return (participantsBySession.value[session.id] || []).some(
+    (student) => String(student.student_id) === String(currentUser.value.id)
+  )
+}
+const hasStudentSessionActions = (session) => canStudentDeleteSession(session) || canStudentLeaveGroup(session)
 
 const canEditSessionTime = (session) => {
   if (!currentUser.value) {
@@ -199,7 +274,13 @@ watch(
 )
 
 const createSession = async () => {
-  if (!newSession.value.scheduled_time || !newSession.value.mentor_profile_id) return
+  if (!newSession.value.scheduled_time) return
+
+  if (!isMentor.value && !newSession.value.mentor_profile_id) return
+  if (isMentor.value && !ownMentorProfile.value) {
+    alert('Nincs elerheto mentor profil a csoportos foglalkozashoz.')
+    return
+  }
 
   minDateTime.value = getCurrentDateTimeLocal()
   const selectedDate = new Date(newSession.value.scheduled_time)
@@ -209,19 +290,67 @@ const createSession = async () => {
   }
 
   try {
+    const isGroup = isMentor.value
     const payload = {
-      mentor_profile_id: Number(newSession.value.mentor_profile_id),
+      mentor_profile_id: Number(isGroup ? ownMentorProfile.value.id : newSession.value.mentor_profile_id),
       scheduled_time: new Date(newSession.value.scheduled_time).toISOString(),
+      is_group: isGroup,
+      max_students: isGroup ? Number(newSession.value.max_students) : null,
     }
+
+    if (isGroup && (!payload.max_students || payload.max_students < 2 || payload.max_students > 10)) {
+      alert('Csoportos foglalkozashoz 2 es 10 fo kozotti limitet adj meg.')
+      return
+    }
+
     await axios.post(`${API_BASE_URL}/sessions`, payload, { headers: getHeaders() })
 
     fetchSessions()
+    fetchAvailableGroupSessions()
     newSession.value.scheduled_time = ''
-    alert('Sikeres időpontfoglalás!')
+    if (isGroup) {
+      newSession.value.max_students = ''
+      alert('Sikeres csoportos foglalkozas letrehozva!')
+    } else {
+      alert('Sikeres időpontfoglalás!')
+    }
   } catch (err) {
     const apiMessage = err?.response?.data?.detail
     alert(apiMessage || 'Hiba történt a létrehozás során.')
     console.error(err)
+  }
+}
+
+const joinGroupSession = async (groupSessionId) => {
+  joiningGroup.value = { ...joiningGroup.value, [groupSessionId]: true }
+  try {
+    await axios.post(`${API_BASE_URL}/sessions/${groupSessionId}/join`, null, { headers: getHeaders() })
+    await Promise.all([fetchSessions(), fetchAvailableGroupSessions()])
+    alert('Sikeres jelentkezes a csoportos foglalkozasra!')
+  } catch (err) {
+    alert(err?.response?.data?.detail || 'Nem sikerult jelentkezni a csoportos foglalkozasra.')
+    console.error(err)
+  } finally {
+    joiningGroup.value = { ...joiningGroup.value, [groupSessionId]: false }
+  }
+}
+
+const leaveGroupSession = async (groupSessionId) => {
+  const confirmed = window.confirm('Biztosan lejelentkezel a csoportos foglalkozasrol?')
+  if (!confirmed) {
+    return
+  }
+
+  leavingGroup.value = { ...leavingGroup.value, [groupSessionId]: true }
+  try {
+    await axios.delete(`${API_BASE_URL}/sessions/${groupSessionId}/leave`, { headers: getHeaders() })
+    await Promise.all([fetchSessions(), fetchAvailableGroupSessions()])
+    alert('Sikeres lejelentkezes a csoportos foglalkozasrol.')
+  } catch (err) {
+    alert(err?.response?.data?.detail || 'Nem sikerult lejelentkezni a csoportos foglalkozasrol.')
+    console.error(err)
+  } finally {
+    leavingGroup.value = { ...leavingGroup.value, [groupSessionId]: false }
   }
 }
 
@@ -284,10 +413,11 @@ const deleteSession = async (sessionId) => {
   }
 }
 
-const saveSessionProgress = async (session) => {
+const saveStudentEvaluation = async (session, student) => {
   const sessionId = session.id
-  const form = progressForms.value[sessionId] || { notes: '', rating: '' }
-  progressSaving.value = { ...progressSaving.value, [sessionId]: true }
+  const form = evaluationForms.value?.[sessionId]?.[student.student_id] || { notes: '', rating: '' }
+  const saveKey = `${sessionId}:${student.student_id}`
+  evaluationSaving.value = { ...evaluationSaving.value, [saveKey]: true }
 
   try {
     if (!canWriteNotes(session) && form.notes?.trim()) {
@@ -306,22 +436,19 @@ const saveSessionProgress = async (session) => {
       return
     }
 
-    const response = await axios.put(
-      `${API_BASE_URL}/sessions/${sessionId}/progress-log`,
+    await axios.put(
+      `${API_BASE_URL}/sessions/${sessionId}/evaluations/${student.student_id}`,
       payload,
       { headers: getHeaders() }
     )
 
-    progressBySession.value = {
-      ...progressBySession.value,
-      [sessionId]: response.data,
-    }
+    await fetchSessionDetailsForSessions()
     alert('Előrehaladás mentve.')
   } catch (err) {
     alert('Hiba történt az előrehaladás mentésekor.')
     console.error(err)
   } finally {
-    progressSaving.value = { ...progressSaving.value, [sessionId]: false }
+    evaluationSaving.value = { ...evaluationSaving.value, [saveKey]: false }
   }
 }
 
@@ -338,6 +465,7 @@ onMounted(() => {
       newSession.value.mentor_profile_id = String(visibleMentors.value[0].id)
     }
     fetchSessions()
+    fetchAvailableGroupSessions()
   })
 })
 </script>
@@ -349,9 +477,9 @@ onMounted(() => {
     <div v-if="error" class="error-box">{{ error }}</div>
 
     <div class="create-box">
-      <h3>Új időpont foglalása</h3>
+      <h3>{{ isMentor ? 'Csoportos foglalkozás létrehozása' : 'Új időpont foglalása' }}</h3>
       <form @submit.prevent="createSession" class="inline-form">
-        <div>
+        <div v-if="!isMentor">
           <label>Mentor:</label>
           <select v-model="newSession.mentor_profile_id" required class="input">
             <option value="" disabled>Válassz mentort</option>
@@ -360,12 +488,32 @@ onMounted(() => {
             </option>
           </select>
         </div>
+        <div v-else>
+          <label>Tanuló limit:</label>
+          <input type="number" min="2" max="10" v-model="newSession.max_students" required class="input" />
+        </div>
         <div>
           <label>Időpont:</label>
           <input type="datetime-local" v-model="newSession.scheduled_time" :min="minDateTime" required class="input" />
         </div>
-        <button type="submit" class="btn btn-primary">Létrehozás</button>
+        <button type="submit" class="btn btn-primary">{{ isMentor ? 'Csoport létrehozása' : 'Létrehozás' }}</button>
       </form>
+    </div>
+
+    <div v-if="!isMentor" class="group-box">
+      <h3>Elérhető csoportos foglalkozások</h3>
+      <p v-if="groupLoading">Csoportos alkalmak betöltése...</p>
+      <p v-else-if="availableGroupSessions.length === 0">Jelenleg nincs szabad csoportos alkalom.</p>
+      <div v-else class="group-list">
+        <article v-for="group in availableGroupSessions" :key="group.id" class="group-item">
+          <p><strong>Mentor:</strong> {{ mentorByProfileId.get(String(group.mentor_profile_id))?.name || `Profil ID: ${group.mentor_profile_id}` }}</p>
+          <p><strong>Időpont:</strong> {{ new Date(group.scheduled_time).toLocaleString('hu-HU') }}</p>
+          <p><strong>Limit:</strong> {{ group.participants_count }}/{{ group.max_students }}</p>
+          <button class="btn btn-primary" :disabled="joiningGroup[group.id]" @click="joinGroupSession(group.id)">
+            {{ joiningGroup[group.id] ? 'Jelentkezés...' : 'Jelentkezem' }}
+          </button>
+        </article>
+      </div>
     </div>
 
     <div v-if="loading">Betöltés...</div>
@@ -385,14 +533,30 @@ onMounted(() => {
             <strong>Státusz:</strong>
             <span :class="['status-badge', session.status]">{{ session.status }}</span>
           </p>
-          <p v-if="canShowFeedbackSummary(session)">
-            <strong>Értékelés:</strong>
-            {{ progressBySession[session.id]?.rating ? `${progressBySession[session.id].rating}/5` : 'Még nincs értékelés' }}
+          <p v-if="session.is_group">
+            <strong>Résztvevők:</strong>
+            {{ participantsCount(session.id) }}/{{ session.max_students }}
           </p>
-          <p v-if="canShowFeedbackSummary(session) && progressBySession[session.id]?.notes">
-            <strong>Megjegyzés:</strong>
-            {{ progressBySession[session.id].notes }}
-          </p>
+
+          <div v-if="session.is_group && participantsBySession[session.id]?.length" class="participants-box">
+            <h4>Feljelentkezett tanulók</h4>
+            <ul class="participants-list">
+              <li v-for="student in participantsBySession[session.id]" :key="student.student_id">
+                {{ student.student_name }} ({{ student.student_email }})
+              </li>
+            </ul>
+          </div>
+
+          <div v-if="!isMentor && canShowFeedbackSummary(session)" class="student-feedback-box">
+            <p>
+              <strong>Értékelés:</strong>
+              {{ myEvaluationBySession[session.id]?.rating ? `${myEvaluationBySession[session.id].rating}/5` : 'Még nincs értékelés' }}
+            </p>
+            <p v-if="myEvaluationBySession[session.id]?.notes">
+              <strong>Megjegyzés:</strong>
+              {{ myEvaluationBySession[session.id].notes }}
+            </p>
+          </div>
 
           <div v-if="canEditSessionTime(session)" class="time-editor">
             <h4>Időpont módosítása</h4>
@@ -408,45 +572,49 @@ onMounted(() => {
           </div>
 
           <div v-if="isMentor && canRateSession(session)" class="progress-editor">
-            <h4>Session előrehaladás</h4>
-            <p>
-              <strong>Előrehaladás:</strong>
-              {{ progressBySession[session.id]?.rating ? `${progressBySession[session.id].rating}/5` : 'Nincs értékelés' }}
-            </p>
-            <p v-if="progressBySession[session.id]?.notes">
-              <strong>Megjegyzés:</strong> {{ progressBySession[session.id].notes }}
-            </p>
+            <h4>Tanulónkénti értékelés</h4>
+            <p v-if="!participantsBySession[session.id]?.length">Ehhez a foglalkozáshoz nincs tanuló.</p>
 
-            <label :for="`rating-${session.id}`">Értékelés (1-5)</label>
-            <select
-              :id="`rating-${session.id}`"
-              v-model="progressForms[session.id].rating"
-              class="input"
+            <div
+              v-for="student in participantsBySession[session.id] || []"
+              :key="student.student_id"
+              class="student-evaluation-card"
             >
-              <option value="">Nincs értékelés</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-            </select>
+              <h5>{{ student.student_name }}</h5>
 
-            <label :for="`notes-${session.id}`">Megjegyzés</label>
-            <textarea
-              :id="`notes-${session.id}`"
-              v-model="progressForms[session.id].notes"
-              class="input notes-input"
-              rows="3"
-              placeholder="Mit gyakoroltatok, miben fejlődött a tanuló?"
-            />
+              <div v-if="evaluationForms[session.id]?.[student.student_id]">
+                <label :for="`rating-${session.id}-${student.student_id}`">Értékelés (1-5)</label>
+                <select
+                  :id="`rating-${session.id}-${student.student_id}`"
+                  v-model="evaluationForms[session.id][student.student_id].rating"
+                  class="input"
+                >
+                  <option value="">Nincs értékelés</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
 
-            <button
-              class="btn btn-primary"
-              :disabled="progressSaving[session.id]"
-              @click="saveSessionProgress(session)"
-            >
-              {{ progressSaving[session.id] ? 'Mentés...' : 'Előrehaladás mentése' }}
-            </button>
+                <label :for="`notes-${session.id}-${student.student_id}`">Megjegyzés</label>
+                <textarea
+                  :id="`notes-${session.id}-${student.student_id}`"
+                  v-model="evaluationForms[session.id][student.student_id].notes"
+                  class="input notes-input"
+                  rows="3"
+                  placeholder="Mit gyakoroltatok, miben fejlődött a tanuló?"
+                />
+
+                <button
+                  class="btn btn-primary"
+                  :disabled="evaluationSaving[`${session.id}:${student.student_id}`]"
+                  @click="saveStudentEvaluation(session, student)"
+                >
+                  {{ evaluationSaving[`${session.id}:${student.student_id}`] ? 'Mentés...' : 'Értékelés mentése' }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -458,6 +626,24 @@ onMounted(() => {
             Lemondás
           </button>
           <button @click="deleteSession(session.id)" class="btn btn-danger">Törlés</button>
+        </div>
+
+        <div v-else-if="hasStudentSessionActions(session)" class="session-actions">
+          <button
+            v-if="canStudentLeaveGroup(session)"
+            @click="leaveGroupSession(session.id)"
+            class="btn btn-warning"
+            :disabled="leavingGroup[session.id]"
+          >
+            {{ leavingGroup[session.id] ? 'Lejelentkezes...' : 'Lejelentkezes' }}
+          </button>
+          <button
+            v-if="canStudentDeleteSession(session)"
+            @click="deleteSession(session.id)"
+            class="btn btn-danger"
+          >
+            Törlés
+          </button>
         </div>
       </div>
     </div>
@@ -471,13 +657,25 @@ h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
 .error-box { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
 
 .create-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
+.group-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
 .inline-form { display: flex; gap: 15px; align-items: flex-end; }
 .input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+
+.group-list { display: grid; gap: 10px; }
+.group-item { border: 1px solid #d8e3f4; border-radius: 8px; padding: 10px 12px; background: #f8fbff; }
+.group-item p { margin: 6px 0; }
+
+.participants-box { margin-top: 10px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f9fbfe; text-align: left; }
+.participants-box h4 { margin: 0; font-size: 0.95rem; }
+.participants-list { margin: 8px 0 0; padding-left: 18px; }
+.student-feedback-box { margin-top: 10px; }
 
 .session-card { background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; }
 .session-info { width: 100%; }
 .session-info p { margin: 5px 0; }
 .progress-editor { margin-top: 12px; padding: 10px; background: #f6f9ff; border: 1px solid #d8e3f4; border-radius: 8px; display: grid; gap: 8px; }
+.student-evaluation-card { border: 1px solid #dce6f6; border-radius: 8px; background: #fff; padding: 10px; display: grid; gap: 8px; text-align: left; }
+.student-evaluation-card h5 { margin: 0; }
 .time-editor { margin-top: 12px; padding: 10px; background: #f7f7fb; border: 1px solid #e1e1ef; border-radius: 8px; display: grid; gap: 8px; }
 .progress-editor h4 { margin: 0 0 2px; color: #2c3e50; font-size: 0.95rem; }
 .time-editor h4 { margin: 0 0 2px; color: #2c3e50; font-size: 0.95rem; }

@@ -11,7 +11,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from database import engine, get_db
-from models import Base, Language, MentorProfile, ProgressLog, Session as StudySession, User, UserRole
+from models import Base, Language, MentorProfile, ProgressLog, Session as StudySession, SessionEvaluation, SessionParticipant, User, UserRole
 
 app = FastAPI(
     title="Nyelvcsere Backend API",
@@ -144,14 +144,28 @@ class MentorProfileUpdate(BaseModel):
 class SessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    student_id: int
+    student_id: Optional[int]
     mentor_profile_id: int
     scheduled_time: datetime
     status: str
+    is_group: bool = False
+    max_students: Optional[int] = None
 
 class SessionCreate(BaseModel):
     mentor_profile_id: int
     scheduled_time: datetime
+    is_group: bool = False
+    max_students: Optional[int] = None
+
+
+class GroupSessionOut(BaseModel):
+    id: int
+    mentor_profile_id: int
+    scheduled_time: datetime
+    status: str
+    max_students: int
+    participants_count: int
+    seats_left: int
 
 class SessionUpdate(BaseModel):
     scheduled_time: Optional[datetime] = None
@@ -166,6 +180,26 @@ class ProgressLogOut(BaseModel):
     rating: Optional[int]
 
 class ProgressLogUpsert(BaseModel):
+    notes: Optional[str] = None
+    rating: Optional[int] = None
+
+
+class SessionParticipantOut(BaseModel):
+    student_id: int
+    student_name: str
+    student_email: str
+
+
+class SessionEvaluationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    session_id: int
+    student_id: int
+    notes: Optional[str]
+    rating: Optional[int]
+
+
+class SessionEvaluationUpsert(BaseModel):
     notes: Optional[str] = None
     rating: Optional[int] = None
 
@@ -253,11 +287,37 @@ def ensure_session_access(session: StudySession, current_user: User, db: Session
     if current_user.id == session.student_id:
         return
 
+    participant = (
+        db.query(SessionParticipant)
+        .filter(
+            SessionParticipant.session_id == session.id,
+            SessionParticipant.student_id == current_user.id,
+        )
+        .first()
+    )
+    if participant is not None:
+        return
+
     mentor_profile = db.query(MentorProfile).filter(MentorProfile.user_id == current_user.id).first()
     if mentor_profile is not None and mentor_profile.id == session.mentor_profile_id:
         return
 
     raise HTTPException(status_code=403, detail="Not enough permissions for this session")
+
+
+def get_session_student_ids(session: StudySession, db: Session) -> list[int]:
+    student_ids: set[int] = set()
+    if session.student_id is not None:
+        student_ids.add(session.student_id)
+
+    participant_ids = [
+        participant.student_id
+        for participant in db.query(SessionParticipant)
+        .filter(SessionParticipant.session_id == session.id)
+        .all()
+    ]
+    student_ids.update(participant_ids)
+    return list(student_ids)
 
 
 def build_pairing_suggestions(db: Session) -> List[PairingSuggestionOut]:
@@ -378,6 +438,25 @@ def ensure_user_schema() -> None:
         connection.execute(text("ALTER TABLE users ADD COLUMN learning_language_id INTEGER"))
 
 
+def ensure_session_schema() -> None:
+    inspector = inspect(engine)
+    if "sessions" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("sessions")}
+    alter_statements = []
+
+    if "is_group" not in existing_columns:
+        alter_statements.append("ALTER TABLE sessions ADD COLUMN is_group BOOLEAN NOT NULL DEFAULT 0")
+    if "max_students" not in existing_columns:
+        alter_statements.append("ALTER TABLE sessions ADD COLUMN max_students INTEGER")
+
+    if alter_statements:
+        with engine.begin() as connection:
+            for statement in alter_statements:
+                connection.execute(text(statement))
+
+
 def sync_mentor_learning_goals(db: Session) -> None:
     mentors = db.query(User).filter(User.role == "mentor").all()
     changed = False
@@ -397,6 +476,7 @@ def sync_mentor_learning_goals(db: Session) -> None:
 
 ensure_mentor_profile_schema()
 ensure_user_schema()
+ensure_session_schema()
 
 
 with Session(engine) as bootstrap_db:
@@ -795,7 +875,21 @@ def update_my_mentor_profile(
 def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[StudySession]:
     query = db.query(StudySession)
     if current_user.role == "student":
-        return query.filter(StudySession.student_id == current_user.id).all()
+        direct_sessions = query.filter(StudySession.student_id == current_user.id).all()
+        joined_session_ids = [
+            participant.session_id
+            for participant in db.query(SessionParticipant)
+            .filter(SessionParticipant.student_id == current_user.id)
+            .all()
+        ]
+        joined_sessions = []
+        if joined_session_ids:
+            joined_sessions = query.filter(StudySession.id.in_(joined_session_ids)).all()
+
+        sessions_by_id = {session.id: session for session in direct_sessions}
+        for session in joined_sessions:
+            sessions_by_id[session.id] = session
+        return list(sessions_by_id.values())
 
     if current_user.role == "mentor":
         return (
@@ -807,11 +901,160 @@ def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(ge
 
     return []
 
+
+@app.get("/sessions/group-available", response_model=List[GroupSessionOut])
+def list_available_group_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[GroupSessionOut]:
+    if current_user.role != "student":
+        return []
+
+    joined_session_ids = {
+        participant.session_id
+        for participant in db.query(SessionParticipant)
+        .filter(SessionParticipant.student_id == current_user.id)
+        .all()
+    }
+
+    sessions = (
+        db.query(StudySession)
+        .filter(
+            StudySession.is_group == True,  # noqa: E712
+            StudySession.status == "scheduled",
+            StudySession.max_students.is_not(None),
+        )
+        .all()
+    )
+
+    results: List[GroupSessionOut] = []
+    for session in sessions:
+        if session.id in joined_session_ids:
+            continue
+
+        participants_count = (
+            db.query(SessionParticipant)
+            .filter(SessionParticipant.session_id == session.id)
+            .count()
+        )
+        seats_left = max((session.max_students or 0) - participants_count, 0)
+        if seats_left <= 0:
+            continue
+
+        results.append(
+            GroupSessionOut(
+                id=session.id,
+                mentor_profile_id=session.mentor_profile_id,
+                scheduled_time=session.scheduled_time,
+                status=session.status,
+                max_students=session.max_students or 0,
+                participants_count=participants_count,
+                seats_left=seats_left,
+            )
+        )
+
+    return results
+
+
+@app.post("/sessions/{session_id}/join", response_model=SessionOut)
+def join_group_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> StudySession:
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can join group sessions")
+
+    db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not db_session.is_group:
+        raise HTTPException(status_code=400, detail="This session is not a group session")
+    if db_session.status != "scheduled":
+        raise HTTPException(status_code=400, detail="Only scheduled group sessions can be joined")
+    if not db_session.max_students or db_session.max_students < 2:
+        raise HTTPException(status_code=400, detail="Invalid group session capacity")
+
+    mentor_profile = db.query(MentorProfile).filter(MentorProfile.id == db_session.mentor_profile_id).first()
+    if mentor_profile and mentor_profile.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot join your own group session")
+
+    existing_participant = (
+        db.query(SessionParticipant)
+        .filter(
+            SessionParticipant.session_id == session_id,
+            SessionParticipant.student_id == current_user.id,
+        )
+        .first()
+    )
+    if existing_participant is not None:
+        return db_session
+
+    participants_count = (
+        db.query(SessionParticipant)
+        .filter(SessionParticipant.session_id == session_id)
+        .count()
+    )
+    if participants_count >= db_session.max_students:
+        raise HTTPException(status_code=409, detail="Group session is full")
+
+    db.add(SessionParticipant(session_id=session_id, student_id=current_user.id))
+    db.commit()
+    db.refresh(db_session)
+    return db_session
+
+
+@app.delete("/sessions/{session_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
+def leave_group_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can leave group sessions")
+
+    db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not db_session.is_group:
+        raise HTTPException(status_code=400, detail="This session is not a group session")
+    if db_session.status != "scheduled":
+        raise HTTPException(status_code=400, detail="Only scheduled group sessions can be left")
+
+    participant = (
+        db.query(SessionParticipant)
+        .filter(
+            SessionParticipant.session_id == session_id,
+            SessionParticipant.student_id == current_user.id,
+        )
+        .first()
+    )
+    if participant is None:
+        raise HTTPException(status_code=400, detail="You are not joined to this group session")
+
+    db.delete(participant)
+    db.commit()
+    return None
+
 @app.get("/progress-logs", response_model=List[ProgressLogOut])
 def list_progress_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[ProgressLog]:
     query = db.query(ProgressLog)
     if current_user.role == "student":
-        return query.filter(ProgressLog.student_id == current_user.id).all()
+        direct_logs = query.filter(ProgressLog.student_id == current_user.id).all()
+        joined_session_ids = [
+            participant.session_id
+            for participant in db.query(SessionParticipant)
+            .filter(SessionParticipant.student_id == current_user.id)
+            .all()
+        ]
+        group_logs = []
+        if joined_session_ids:
+            group_logs = query.filter(ProgressLog.session_id.in_(joined_session_ids)).all()
+
+        logs_by_id = {log.id: log for log in direct_logs}
+        for log in group_logs:
+            logs_by_id[log.id] = log
+        return list(logs_by_id.values())
 
     if current_user.role == "mentor":
         return (
@@ -838,6 +1081,95 @@ def get_session_progress_log(
     ensure_session_access(db_session, current_user, db)
 
     return db.query(ProgressLog).filter(ProgressLog.session_id == session_id).first()
+
+
+@app.get("/sessions/{session_id}/participants", response_model=List[SessionParticipantOut])
+def get_session_participants(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[SessionParticipantOut]:
+    db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    ensure_session_access(db_session, current_user, db)
+
+    users = db.query(User).filter(User.id.in_(get_session_student_ids(db_session, db))).all()
+    return [
+        SessionParticipantOut(student_id=user.id, student_name=user.name, student_email=user.email)
+        for user in users
+    ]
+
+
+@app.get("/sessions/{session_id}/evaluations", response_model=List[SessionEvaluationOut])
+def list_session_evaluations(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[SessionEvaluation]:
+    db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    ensure_session_access(db_session, current_user, db)
+
+    query = db.query(SessionEvaluation).filter(SessionEvaluation.session_id == session_id)
+    if current_user.role == "student":
+        return query.filter(SessionEvaluation.student_id == current_user.id).all()
+    return query.all()
+
+
+@app.put("/sessions/{session_id}/evaluations/{student_id}", response_model=SessionEvaluationOut)
+def upsert_session_evaluation(
+    session_id: int,
+    student_id: int,
+    payload: SessionEvaluationUpsert,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SessionEvaluation:
+    db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Only mentors can rate students")
+
+    ensure_session_access(db_session, current_user, db)
+
+    if db_session.status != "completed":
+        raise HTTPException(status_code=400, detail="Evaluations are allowed only for completed sessions")
+
+    if student_id not in get_session_student_ids(db_session, db):
+        raise HTTPException(status_code=400, detail="Student is not part of this session")
+
+    if payload.rating is not None and (payload.rating < 1 or payload.rating > 5):
+        raise HTTPException(status_code=400, detail="rating must be between 1 and 5")
+
+    evaluation = (
+        db.query(SessionEvaluation)
+        .filter(
+            SessionEvaluation.session_id == session_id,
+            SessionEvaluation.student_id == student_id,
+        )
+        .first()
+    )
+
+    if evaluation is None:
+        evaluation = SessionEvaluation(
+            session_id=session_id,
+            student_id=student_id,
+            notes=payload.notes,
+            rating=payload.rating,
+        )
+        db.add(evaluation)
+    else:
+        evaluation.notes = payload.notes
+        evaluation.rating = payload.rating
+
+    db.commit()
+    db.refresh(evaluation)
+    return evaluation
 
 
 @app.put("/sessions/{session_id}/progress-log", response_model=ProgressLogOut)
@@ -889,8 +1221,18 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db), curren
     if mentor_profile is None:
         raise HTTPException(status_code=404, detail="Mentor profile not found")
 
-    if mentor_profile.user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="You cannot book a session with your own mentor profile")
+    if payload.is_group:
+        if current_user.role != "mentor":
+            raise HTTPException(status_code=403, detail="Only mentors can create group sessions")
+        if mentor_profile.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You can create group sessions only for your own mentor profile")
+        if payload.max_students is None or payload.max_students < 2 or payload.max_students > 10:
+            raise HTTPException(status_code=400, detail="Group session max_students must be between 2 and 10")
+    else:
+        if current_user.role != "student":
+            raise HTTPException(status_code=403, detail="Only students can book one-on-one sessions")
+        if mentor_profile.user_id == current_user.id:
+            raise HTTPException(status_code=400, detail="You cannot book a session with your own mentor profile")
 
     conflicting_session = (
         db.query(StudySession)
@@ -905,12 +1247,16 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db), curren
         raise HTTPException(status_code=409, detail="The selected timeslot is already booked")
 
     new_session = StudySession(
-        student_id=current_user.id,
+        student_id=(current_user.id if not payload.is_group else None),
         mentor_profile_id=payload.mentor_profile_id,
         scheduled_time=payload.scheduled_time,
-        status="scheduled"
+        status="scheduled",
+        is_group=payload.is_group,
+        max_students=(payload.max_students if payload.is_group else None),
     )
     db.add(new_session)
+    db.flush()
+
     db.commit()
     db.refresh(new_session)
     return new_session
@@ -955,10 +1301,17 @@ def delete_session(session_id: int, db: Session = Depends(get_db), current_user:
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if current_user.role != "mentor":
-        raise HTTPException(status_code=403, detail="Only mentors can delete sessions")
-
-    ensure_session_access(db_session, current_user, db)
+    if current_user.role == "mentor":
+        ensure_session_access(db_session, current_user, db)
+    elif current_user.role == "student":
+        if db_session.status != "scheduled":
+            raise HTTPException(status_code=400, detail="Students can delete only scheduled sessions")
+        if db_session.is_group:
+            raise HTTPException(status_code=400, detail="Group sessions cannot be deleted by students")
+        if db_session.student_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You can delete only your own sessions")
+    else:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     
     db.delete(db_session)
     db.commit()
