@@ -114,7 +114,6 @@ onMounted(fetchDashboard)
         <button class="refresh-btn" @click="fetchDashboard" :disabled="loading">
           {{ loading ? 'Frissítés...' : 'Frissítés' }}
         </button>
-        <button class="logout-btn" @click="handleLogout">Kijelentkezés</button>
       </div>
     </div>
 

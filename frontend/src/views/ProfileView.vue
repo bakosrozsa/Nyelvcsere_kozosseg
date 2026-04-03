@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -18,12 +18,7 @@ const error = ref('')
 const progressLoading = ref(false)
 const progressError = ref('')
 const progressEntries = ref([])
-const progressStats = ref({
-  totalSessions: 0,
-  completedSessions: 0,
-  ratedSessions: 0,
-  averageRating: null,
-})
+const progressLanguageFilter = ref('all')
 
 const API_BASE_URL = 'http://127.0.0.1:8000'
 
@@ -36,29 +31,58 @@ const getAvailableRequestedLanguages = () => {
   return languages.value.filter((lang) => String(lang.id) !== String(offeredLanguageId.value))
 }
 
-const buildProgressState = (sessionsData, progressLogsData) => {
+const availableProgressLanguages = computed(() => {
+  const unique = new Map()
+  progressEntries.value.forEach((entry) => {
+    if (!entry.languageId) {
+      return
+    }
+    unique.set(String(entry.languageId), entry.languageName)
+  })
+  return Array.from(unique.entries()).map(([id, name]) => ({ id, name }))
+})
+
+const filteredProgressEntries = computed(() => {
+  if (progressLanguageFilter.value === 'all') {
+    return progressEntries.value
+  }
+
+  return progressEntries.value.filter(
+    (entry) => String(entry.languageId) === String(progressLanguageFilter.value)
+  )
+})
+
+const filteredProgressStats = computed(() => {
+  const entries = filteredProgressEntries.value
+  const completedSessions = entries.filter((entry) => entry.session.status === 'completed').length
+  const ratedEntries = entries.filter((entry) => typeof entry.progress?.rating === 'number')
+  const averageRating = ratedEntries.length
+    ? (ratedEntries.reduce((sum, entry) => sum + entry.progress.rating, 0) / ratedEntries.length).toFixed(1)
+    : null
+
+  return {
+    totalSessions: entries.length,
+    completedSessions,
+    ratedSessions: ratedEntries.length,
+    averageRating,
+  }
+})
+
+const buildProgressState = (sessionsData, progressLogsData, mentorProfilesData) => {
   const progressBySessionId = new Map(progressLogsData.map((log) => [log.session_id, log]))
+  const mentorProfileById = new Map(mentorProfilesData.map((profile) => [profile.id, profile]))
+  const languageNameById = new Map(languages.value.map((lang) => [lang.id, lang.name]))
 
   const entries = sessionsData
     .map((session) => ({
       session,
       progress: progressBySessionId.get(session.id) || null,
+      languageId: mentorProfileById.get(session.mentor_profile_id)?.offered_language_id ?? null,
+      languageName: languageNameById.get(mentorProfileById.get(session.mentor_profile_id)?.offered_language_id) || 'Nincs megadva',
     }))
     .sort((a, b) => new Date(b.session.scheduled_time).getTime() - new Date(a.session.scheduled_time).getTime())
 
-  const completedSessions = sessionsData.filter((session) => session.status === 'completed').length
-  const ratedLogs = progressLogsData.filter((log) => typeof log.rating === 'number')
-  const averageRating = ratedLogs.length
-    ? (ratedLogs.reduce((sum, log) => sum + log.rating, 0) / ratedLogs.length).toFixed(1)
-    : null
-
   progressEntries.value = entries
-  progressStats.value = {
-    totalSessions: sessionsData.length,
-    completedSessions,
-    ratedSessions: ratedLogs.length,
-    averageRating,
-  }
 }
 
 const fetchProgressOverview = async (token) => {
@@ -66,7 +90,7 @@ const fetchProgressOverview = async (token) => {
   progressError.value = ''
 
   try {
-    const [sessionsResponse, logsResponse] = await Promise.all([
+    const [sessionsResponse, logsResponse, mentorProfilesResponse] = await Promise.all([
       fetch(`${API_BASE_URL}/sessions`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -79,18 +103,25 @@ const fetchProgressOverview = async (token) => {
           'Content-Type': 'application/json',
         },
       }),
+      fetch(`${API_BASE_URL}/mentor-profiles`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }),
     ])
 
-    if (!sessionsResponse.ok || !logsResponse.ok) {
+    if (!sessionsResponse.ok || !logsResponse.ok || !mentorProfilesResponse.ok) {
       throw new Error('Nem sikerült betölteni az előrehaladás adatait.')
     }
 
-    const [sessionsData, progressLogsData] = await Promise.all([
+    const [sessionsData, progressLogsData, mentorProfilesData] = await Promise.all([
       sessionsResponse.json(),
       logsResponse.json(),
+      mentorProfilesResponse.json(),
     ])
 
-    buildProgressState(sessionsData, progressLogsData)
+    buildProgressState(sessionsData, progressLogsData, mentorProfilesData)
   } catch (err) {
     progressError.value = err.message || 'Hiba történt az előrehaladás betöltésekor.'
   } finally {
@@ -345,26 +376,35 @@ onMounted(() => {
             <div class="progress-stats">
               <div class="stat-card">
                 <span class="stat-label">Foglalkozások</span>
-                <strong>{{ progressStats.totalSessions }}</strong>
+                <strong>{{ filteredProgressStats.totalSessions }}</strong>
               </div>
               <div class="stat-card">
                 <span class="stat-label">Befejezve</span>
-                <strong>{{ progressStats.completedSessions }}</strong>
+                <strong>{{ filteredProgressStats.completedSessions }}</strong>
               </div>
               <div class="stat-card">
                 <span class="stat-label">Értékelések</span>
-                <strong>{{ progressStats.ratedSessions }}</strong>
+                <strong>{{ filteredProgressStats.ratedSessions }}</strong>
               </div>
               <div class="stat-card">
                 <span class="stat-label">Átlag</span>
-                <strong>{{ progressStats.averageRating ? `${progressStats.averageRating}/5` : '-' }}</strong>
+                <strong>{{ filteredProgressStats.averageRating ? `${filteredProgressStats.averageRating}/5` : '-' }}</strong>
               </div>
             </div>
 
-            <p v-if="progressEntries.length === 0" class="progress-empty">Még nincs megjeleníthető előrehaladási adat.</p>
+            <label for="progressLanguageFilter" class="progress-filter-label">Szűrés tanult nyelv szerint</label>
+            <select id="progressLanguageFilter" v-model="progressLanguageFilter" class="progress-filter-select">
+              <option value="all">Minden tanult nyelv</option>
+              <option v-for="language in availableProgressLanguages" :key="`progress-${language.id}`" :value="language.id">
+                {{ language.name }}
+              </option>
+            </select>
+
+            <p v-if="filteredProgressEntries.length === 0" class="progress-empty">Még nincs megjeleníthető előrehaladási adat.</p>
 
             <div v-else class="progress-list">
-              <article v-for="entry in progressEntries" :key="entry.session.id" class="progress-item">
+              <article v-for="entry in filteredProgressEntries" :key="entry.session.id" class="progress-item">
+                <p><strong>Tanult nyelv:</strong> {{ entry.languageName }}</p>
                 <p><strong>Időpont:</strong> {{ new Date(entry.session.scheduled_time).toLocaleString('hu-HU') }}</p>
                 <p><strong>Státusz:</strong> {{ entry.session.status }}</p>
                 <p><strong>Értékelés:</strong> {{ entry.progress?.rating ? `${entry.progress.rating}/5` : 'Nincs értékelés' }}</p>
@@ -506,6 +546,23 @@ onMounted(() => {
 .progress-list {
   display: grid;
   gap: 10px;
+}
+
+.progress-filter-label {
+  display: block;
+  margin: 6px 0;
+  font-size: 0.9rem;
+  color: #324a62;
+  font-weight: 600;
+}
+
+.progress-filter-select {
+  width: 100%;
+  border: 1px solid #cfd9e3;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  margin-bottom: 12px;
 }
 
 .progress-item {

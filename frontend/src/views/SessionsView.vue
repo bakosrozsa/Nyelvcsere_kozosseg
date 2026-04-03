@@ -344,12 +344,12 @@ onMounted(() => {
 
 <template>
   <div class="sessions-page">
-    <h2>Foglalkozások (CRUD Teszt)</h2>
+    <h2>Foglalkozások</h2>
 
     <div v-if="error" class="error-box">{{ error }}</div>
 
     <div class="create-box">
-      <h3>Új időpont foglalása (Create)</h3>
+      <h3>Új időpont foglalása</h3>
       <form @submit.prevent="createSession" class="inline-form">
         <div>
           <label>Mentor:</label>
@@ -371,7 +371,7 @@ onMounted(() => {
     <div v-if="loading">Betöltés...</div>
 
     <div v-else class="sessions-list">
-      <h3>Jelenlegi foglalások (Read)</h3>
+      <h3>Jelenlegi foglalások</h3>
       <p v-if="sessions.length === 0">Még nincs egyetlen foglalkozás sem.</p>
 
       <div v-for="session in sessions" :key="session.id" class="session-card">
