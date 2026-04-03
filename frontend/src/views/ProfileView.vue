@@ -15,6 +15,15 @@ const saveLoading = ref(false)
 const saveMessage = ref('')
 const loading = ref(false)
 const error = ref('')
+const progressLoading = ref(false)
+const progressError = ref('')
+const progressEntries = ref([])
+const progressStats = ref({
+  totalSessions: 0,
+  completedSessions: 0,
+  ratedSessions: 0,
+  averageRating: null,
+})
 
 const API_BASE_URL = 'http://127.0.0.1:8000'
 
@@ -25,6 +34,68 @@ const getAvailableRequestedLanguages = () => {
     return languages.value
   }
   return languages.value.filter((lang) => String(lang.id) !== String(offeredLanguageId.value))
+}
+
+const buildProgressState = (sessionsData, progressLogsData) => {
+  const progressBySessionId = new Map(progressLogsData.map((log) => [log.session_id, log]))
+
+  const entries = sessionsData
+    .map((session) => ({
+      session,
+      progress: progressBySessionId.get(session.id) || null,
+    }))
+    .sort((a, b) => new Date(b.session.scheduled_time).getTime() - new Date(a.session.scheduled_time).getTime())
+
+  const completedSessions = sessionsData.filter((session) => session.status === 'completed').length
+  const ratedLogs = progressLogsData.filter((log) => typeof log.rating === 'number')
+  const averageRating = ratedLogs.length
+    ? (ratedLogs.reduce((sum, log) => sum + log.rating, 0) / ratedLogs.length).toFixed(1)
+    : null
+
+  progressEntries.value = entries
+  progressStats.value = {
+    totalSessions: sessionsData.length,
+    completedSessions,
+    ratedSessions: ratedLogs.length,
+    averageRating,
+  }
+}
+
+const fetchProgressOverview = async (token) => {
+  progressLoading.value = true
+  progressError.value = ''
+
+  try {
+    const [sessionsResponse, logsResponse] = await Promise.all([
+      fetch(`${API_BASE_URL}/sessions`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }),
+      fetch(`${API_BASE_URL}/progress-logs`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }),
+    ])
+
+    if (!sessionsResponse.ok || !logsResponse.ok) {
+      throw new Error('Nem sikerült betölteni az előrehaladás adatait.')
+    }
+
+    const [sessionsData, progressLogsData] = await Promise.all([
+      sessionsResponse.json(),
+      logsResponse.json(),
+    ])
+
+    buildProgressState(sessionsData, progressLogsData)
+  } catch (err) {
+    progressError.value = err.message || 'Hiba történt az előrehaladás betöltésekor.'
+  } finally {
+    progressLoading.value = false
+  }
 }
 
 const fetchCurrentUser = async () => {
@@ -62,6 +133,8 @@ const fetchCurrentUser = async () => {
     languages.value = await languagesResponse.json()
     user.value = meData
     learningLanguageId.value = meData.learning_language_id ? String(meData.learning_language_id) : ''
+
+    await fetchProgressOverview(token)
 
     if (meData.role === 'mentor') {
       const mentorProfileResponse = await fetch(`${API_BASE_URL}/mentor-profile/me`, {
@@ -262,6 +335,44 @@ onMounted(() => {
 
           <p v-if="saveMessage" class="save-message">{{ saveMessage }}</p>
         </form>
+
+        <section class="progress-section">
+          <h3>Előrehaladás</h3>
+
+          <div v-if="progressError" class="progress-error">{{ progressError }}</div>
+          <div v-else-if="progressLoading" class="loading">Előrehaladás betöltése...</div>
+          <div v-else>
+            <div class="progress-stats">
+              <div class="stat-card">
+                <span class="stat-label">Foglalkozások</span>
+                <strong>{{ progressStats.totalSessions }}</strong>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Befejezve</span>
+                <strong>{{ progressStats.completedSessions }}</strong>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Értékelések</span>
+                <strong>{{ progressStats.ratedSessions }}</strong>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Átlag</span>
+                <strong>{{ progressStats.averageRating ? `${progressStats.averageRating}/5` : '-' }}</strong>
+              </div>
+            </div>
+
+            <p v-if="progressEntries.length === 0" class="progress-empty">Még nincs megjeleníthető előrehaladási adat.</p>
+
+            <div v-else class="progress-list">
+              <article v-for="entry in progressEntries" :key="entry.session.id" class="progress-item">
+                <p><strong>Időpont:</strong> {{ new Date(entry.session.scheduled_time).toLocaleString('hu-HU') }}</p>
+                <p><strong>Státusz:</strong> {{ entry.session.status }}</p>
+                <p><strong>Értékelés:</strong> {{ entry.progress?.rating ? `${entry.progress.rating}/5` : 'Nincs értékelés' }}</p>
+                <p v-if="entry.progress?.notes"><strong>Megjegyzés:</strong> {{ entry.progress.notes }}</p>
+              </article>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -358,5 +469,65 @@ onMounted(() => {
   margin: 2px 0 0;
   color: #135d2c;
   font-size: 0.92rem;
+}
+
+.progress-section {
+  margin-top: 22px;
+  border-top: 1px solid #e3e3e3;
+  padding-top: 16px;
+}
+
+.progress-section h3 {
+  margin: 0 0 10px;
+  color: #2c3e50;
+}
+
+.progress-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stat-card {
+  border: 1px solid #d6e0eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fbff;
+  display: grid;
+  gap: 4px;
+}
+
+.stat-label {
+  color: #516476;
+  font-size: 0.85rem;
+}
+
+.progress-list {
+  display: grid;
+  gap: 10px;
+}
+
+.progress-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.progress-item p {
+  margin: 6px 0;
+}
+
+.progress-empty {
+  color: #5f6e7d;
+  margin: 8px 0 0;
+}
+
+.progress-error {
+  color: #b42318;
+  background: #f8d7da;
+  padding: 10px 12px;
+  border-radius: 6px;
 }
 </style>

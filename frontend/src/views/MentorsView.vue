@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 
 const mentors = ref([])
+const currentUser = ref(null)
 const loading = ref(false)
 const error = ref('')
 const actionMessage = ref('')
@@ -55,6 +56,9 @@ const availableLanguages = computed(() => {
 const filteredMentors = computed(() => {
   const query = searchText.value.trim().toLowerCase()
   return mentors.value.filter((mentor) => {
+    if (currentUser.value?.role === 'mentor' && mentor.userId === currentUser.value.id) {
+      return false
+    }
     const matchesText =
       query.length === 0 ||
       mentor.mentorName.toLowerCase().includes(query) ||
@@ -131,6 +135,33 @@ const fetchMentors = async () => {
     error.value = err?.message || 'Hiba történt a mentorok betöltésekor.'
   } finally {
     loading.value = false
+  }
+}
+
+const fetchCurrentUser = async () => {
+  try {
+    const token = getStoredToken()
+    if (!token) {
+      currentUser.value = null
+      return
+    }
+
+    const response = await fetch(`${API_BASE_URL}/users/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      currentUser.value = null
+      return
+    }
+
+    currentUser.value = await response.json()
+  } catch (err) {
+    currentUser.value = null
+    console.error(err)
   }
 }
 
@@ -215,7 +246,9 @@ const handleBooking = async (mentor) => {
 
 onMounted(() => {
   syncAuthState()
-  fetchMentors()
+  Promise.all([fetchCurrentUser(), fetchMentors()]).then(() => {
+    syncAuthState()
+  })
 })
 </script>
 

@@ -851,6 +851,9 @@ def upsert_session_progress_log(
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    if current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Only mentors can add notes or ratings")
+
     ensure_session_access(db_session, current_user, db)
 
     if payload.rating is not None and (payload.rating < 1 or payload.rating > 5):
@@ -858,6 +861,9 @@ def upsert_session_progress_log(
 
     if payload.rating is not None and db_session.status != "completed":
         raise HTTPException(status_code=400, detail="Rating is allowed only for completed sessions")
+
+    if payload.notes is not None and db_session.status != "completed":
+        raise HTTPException(status_code=400, detail="Notes are allowed only for completed sessions")
 
     progress_log = db.query(ProgressLog).filter(ProgressLog.session_id == session_id).first()
     if progress_log is None:
@@ -886,6 +892,18 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db), curren
     if mentor_profile.user_id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot book a session with your own mentor profile")
 
+    conflicting_session = (
+        db.query(StudySession)
+        .filter(
+            StudySession.mentor_profile_id == payload.mentor_profile_id,
+            StudySession.scheduled_time == payload.scheduled_time,
+            StudySession.status == "scheduled",
+        )
+        .first()
+    )
+    if conflicting_session is not None:
+        raise HTTPException(status_code=409, detail="The selected timeslot is already booked")
+
     new_session = StudySession(
         student_id=current_user.id,
         mentor_profile_id=payload.mentor_profile_id,
@@ -903,8 +921,24 @@ def update_session(session_id: int, payload: SessionUpdate, db: Session = Depend
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if db_session.student_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not enough permissions for this session")
+    if payload.status is not None and current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Only mentors can change the session status")
+
+    if payload.status is not None:
+        ensure_session_access(db_session, current_user, db)
+    elif payload.scheduled_time is not None:
+        ensure_session_access(db_session, current_user, db)
+    else:
+        raise HTTPException(status_code=400, detail="No changes provided")
+
+    if payload.status is not None and db_session.status != "scheduled":
+        raise HTTPException(status_code=400, detail="Session status can only be changed while the session is scheduled")
+
+    if payload.scheduled_time is not None and db_session.status != "scheduled":
+        raise HTTPException(status_code=400, detail="Session time can only be changed while the session is scheduled")
+
+    if payload.scheduled_time is not None and payload.status is not None:
+        raise HTTPException(status_code=400, detail="Session time cannot be changed together with a status update")
     
     if payload.scheduled_time:
         db_session.scheduled_time = payload.scheduled_time
@@ -920,6 +954,9 @@ def delete_session(session_id: int, db: Session = Depends(get_db), current_user:
     db_session = db.query(StudySession).filter(StudySession.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    if current_user.role != "mentor":
+        raise HTTPException(status_code=403, detail="Only mentors can delete sessions")
 
     ensure_session_access(db_session, current_user, db)
     
