@@ -316,7 +316,7 @@ onMounted(() => {
             {{ selectedMentorId === mentor.id ? 'Mégse' : 'Foglalás' }}
           </button>
           <p v-else-if="isAuthenticated && currentUser?.role === 'mentor'" class="mentor-booking-disabled">
-            Mentorkent itt nem foglalhatsz idopontot.
+            Mentorkent nem foglalhatsz időpontot
           </p>
           <router-link v-else class="guest-book-link" :to="{ name: 'Login', query: { redirect: '/mentors' } }">
             Bejelentkezes a foglalashoz

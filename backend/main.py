@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import os
+from pathlib import Path
 from typing import List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -14,6 +15,27 @@ from sqlalchemy.orm import Session
 from database import engine, get_db
 from models import Base, Language, MentorProfile, ProgressLog, Session as StudySession, SessionEvaluation, SessionParticipant, User, UserRole
 
+
+def load_env_file(env_path: Path) -> None:
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+
+        value = value.strip()
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+
+        os.environ[key] = value
+
 app = FastAPI(
     title="Nyelvcsere Backend API",
     description="FastAPI server for the language exchange platform.",
@@ -27,6 +49,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+load_env_file(Path(__file__).resolve().parent / ".env")
 
 Base.metadata.create_all(bind=engine)
 
@@ -1006,7 +1030,7 @@ def leave_group_session(
 
     db.delete(participant)
     db.commit()
-    return None
+
 
 @app.get("/progress-logs", response_model=List[ProgressLogOut])
 def list_progress_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> List[ProgressLog]:
@@ -1288,4 +1312,4 @@ def delete_session(session_id: int, db: Session = Depends(get_db), current_user:
     
     db.delete(db_session)
     db.commit()
-    return None
+    return

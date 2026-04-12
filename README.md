@@ -64,6 +64,12 @@ Nyelvcsere_kozosseg/
 └── README.md
 ```
 
+## Kiegészítő dokumentáció
+
+- [docs/README.md](docs/README.md) - részletes szoftveres dokumentáció
+- [prompts/README.md](prompts/README.md) - AI-használat összegzése
+- [prompts/prompt-log.md](prompts/prompt-log.md) - minta promptnapló
+
 ## Gyors indítás
 
 ### 1. Backend
