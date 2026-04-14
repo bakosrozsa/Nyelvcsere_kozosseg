@@ -213,7 +213,7 @@ npm run test
 - `POST /register`
 - `POST /login`
 - `GET /token-check`
-- `GET /users` (mentor: teljes lista, student: saját profil)
+- `GET /users` (mentor: teljes lista, student: csak a többi tanuló, saját magát és mentorokat nem tartalmazza)
 - `GET /users/me`
 - `PUT /users/me`
 - `GET /users/{user_id}`
@@ -244,6 +244,8 @@ npm run test
 - `PUT /sessions/{session_id}/progress-log`
 - `GET /sessions/{session_id}/evaluations`
 - `PUT /sessions/{session_id}/evaluations/{student_id}`
+
+Megjegyzés az értékeléshez: egy mentor alapértelmezetten csak egyszer menthet értékelést tanulónként adott foglalkozáshoz. Már mentett értékelés módosításához a kérésben `allow_update=true` szükséges.
 
 ## 12. Frontend route-ok
 - `/` - Kezdőoldal

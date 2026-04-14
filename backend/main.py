@@ -237,6 +237,9 @@ class SessionEvaluationOut(BaseModel):
 class SessionEvaluationUpsert(BaseModel):
     notes: Optional[str] = None
     rating: Optional[int] = None
+    # Clients must send the JSON boolean value `true` to allow updating
+    # an existing evaluation, preventing accidental overwrites.
+    allow_update: bool = False
 
 
 def truncate_password_for_bcrypt(password: str) -> str:
@@ -632,7 +635,13 @@ def list_users(
         return db.query(User).offset(skip).limit(limit).all()
 
     if current_user.role == "student":
-        return [current_user]
+        return (
+            db.query(User)
+            .filter(User.role == "student", User.id != current_user.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     raise HTTPException(status_code=403, detail="Only mentors and students can access user list")
 
@@ -1161,6 +1170,11 @@ def upsert_session_evaluation(
         )
         db.add(evaluation)
     else:
+        if not payload.allow_update:
+            raise HTTPException(
+                status_code=400,
+                detail="Evaluation already exists. Use allow_update=True to modify it",
+            )
         evaluation.notes = payload.notes
         evaluation.rating = payload.rating
 

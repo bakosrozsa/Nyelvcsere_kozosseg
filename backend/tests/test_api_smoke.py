@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 
 os.environ.setdefault("NYELVCSERE_SECRET_KEY", "test-secret-key")
 
@@ -75,8 +76,20 @@ def test_student_cannot_access_pairing_suggestions() -> None:
     assert response.status_code == 403
 
 
-def test_student_users_endpoint_returns_self_only() -> None:
+def test_student_users_endpoint_excludes_self_and_mentors() -> None:
     token = _login_token("peter.student@example.com", "demo123")
+
+    register_response = client.post(
+        "/register",
+        json={
+            "name": "Test Student Peer",
+            "email": "peer.student@example.com",
+            "password": "demo123",
+            "role": "student",
+        },
+    )
+    assert register_response.status_code == 201
+
     response = client.get(
         "/users",
         headers={"Authorization": f"Bearer {token}"},
@@ -84,8 +97,10 @@ def test_student_users_endpoint_returns_self_only() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 1
-    assert payload[0]["email"] == "peter.student@example.com"
+    emails = {user["email"] for user in payload}
+    assert "peer.student@example.com" in emails
+    assert "peter.student@example.com" not in emails
+    assert "anna.mentor@example.com" not in emails
 
 
 def test_student_cannot_create_group_session() -> None:
@@ -106,3 +121,67 @@ def test_student_cannot_create_group_session() -> None:
     )
 
     assert response.status_code == 403
+
+
+def test_mentor_evaluation_requires_explicit_update_flag() -> None:
+    mentor_token = _login_token("anna.mentor@example.com", "demo123")
+    student_token = _login_token("peter.student@example.com", "demo123")
+
+    mentor_profiles_response = client.get("/mentor-profiles")
+    assert mentor_profiles_response.status_code == 200
+    mentor_profiles_payload = mentor_profiles_response.json()
+    assert mentor_profiles_payload
+    mentor_profile_id = mentor_profiles_payload[0]["id"]
+
+    create_response = client.post(
+        "/sessions",
+        headers={"Authorization": f"Bearer {student_token}"},
+        json={
+            "mentor_profile_id": mentor_profile_id,
+            "scheduled_time": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+            "is_group": False,
+            "max_students": None,
+        },
+    )
+    assert create_response.status_code == 201
+    created_session = create_response.json()
+    session_id = created_session["id"]
+
+    complete_response = client.put(
+        f"/sessions/{session_id}",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"status": "completed"},
+    )
+    assert complete_response.status_code == 200
+
+    participants_response = client.get(
+        f"/sessions/{session_id}/participants",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+    )
+    assert participants_response.status_code == 200
+    participants_payload = participants_response.json()
+    assert participants_payload, "Expected at least one participant in completed session"
+    student_id = participants_payload[0]["student_id"]
+
+    first_save = client.put(
+        f"/sessions/{session_id}/evaluations/{student_id}",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"rating": 4, "notes": "Első értékelés"},
+    )
+    assert first_save.status_code == 200
+
+    blocked_update = client.put(
+        f"/sessions/{session_id}/evaluations/{student_id}",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"rating": 5, "notes": "Második értékelés"},
+    )
+    assert blocked_update.status_code == 400
+    assert "allow_update" in blocked_update.json().get("detail", "")
+
+    allowed_update = client.put(
+        f"/sessions/{session_id}/evaluations/{student_id}",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"rating": 5, "notes": "Frissített értékelés", "allow_update": True},
+    )
+    assert allowed_update.status_code == 200
+    assert allowed_update.json()["rating"] == 5

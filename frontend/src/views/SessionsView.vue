@@ -13,6 +13,8 @@ const participantsBySession = ref({})
 const evaluationsBySession = ref({})
 const evaluationForms = ref({})
 const evaluationSaving = ref({})
+// Tracks which student evaluations are currently in edit mode.
+const evaluationEditEnabled = ref({})
 const myEvaluationBySession = ref({})
 const sessionTimeForms = ref({})
 const availableGroupSessions = ref([])
@@ -224,8 +226,53 @@ const fetchSessionDetailsForSessions = async () => {
 }
 
 const canRateSession = (session) => session?.status === 'completed'
-const canWriteNotes = (session) => session?.status === 'completed'
 const canShowFeedbackSummary = (session) => isMentor.value || session?.status !== 'canceled'
+/**
+ * Generates a unique key used to track evaluation edit state for a
+ * specific session-student pair.
+ *
+ * @param {string|number} sessionId - The session identifier.
+ * @param {string|number} studentId - The student identifier.
+ * @returns {string} A composite key in the format "sessionId:studentId".
+ */
+
+const evaluationKey = (sessionId, studentId) => `${sessionId}:${studentId}`
+const hasExistingEvaluation = (sessionId, studentId) =>
+  (evaluationsBySession.value?.[sessionId] || []).some(
+    (evaluation) => String(evaluation.student_id) === String(studentId)
+  )
+const canEditExistingEvaluation = (sessionId, studentId) =>
+  Boolean(evaluationEditEnabled.value[evaluationKey(sessionId, studentId)])
+
+const enableEvaluationEdit = (sessionId, studentId) => {
+  const key = evaluationKey(sessionId, studentId)
+  evaluationEditEnabled.value = {
+    ...evaluationEditEnabled.value,
+    [key]: true,
+  }
+}
+
+const cancelEvaluationEdit = (sessionId, studentId) => {
+  const key = evaluationKey(sessionId, studentId)
+  evaluationEditEnabled.value = {
+    ...evaluationEditEnabled.value,
+    [key]: false,
+  }
+
+  const existing = (evaluationsBySession.value?.[sessionId] || []).find(
+    (evaluation) => String(evaluation.student_id) === String(studentId)
+  )
+
+  if (!evaluationForms.value?.[sessionId]?.[studentId]) {
+    return
+  }
+
+  evaluationForms.value[sessionId][studentId] = {
+    notes: existing?.notes || '',
+    rating: existing?.rating ? String(existing.rating) : '',
+  }
+}
+
 const participantsCount = (sessionId) => participantsBySession.value[sessionId]?.length || 0
 const canStudentDeleteSession = (session) => {
   if (currentUser.value?.role !== 'student') {
@@ -420,7 +467,15 @@ const deleteSession = async (sessionId) => {
 const saveStudentEvaluation = async (session, student) => {
   const sessionId = session.id
   const form = evaluationForms.value?.[sessionId]?.[student.student_id] || { notes: '', rating: '' }
-  const saveKey = `${sessionId}:${student.student_id}`
+  const saveKey = evaluationKey(sessionId, student.student_id)
+  const existingEvaluation = hasExistingEvaluation(sessionId, student.student_id)
+  const editEnabled = canEditExistingEvaluation(sessionId, student.student_id)
+
+  if (existingEvaluation && !editEnabled) {
+    alert('Ehhez előbb kattints az "Értékelés változtatása" gombra.')
+    return
+  }
+
   evaluationSaving.value = { ...evaluationSaving.value, [saveKey]: true }
 
   try {
@@ -431,6 +486,7 @@ const saveStudentEvaluation = async (session, student) => {
 
     const payload = {
       notes: canWriteNotes(session) ? form.notes?.trim() || null : null,
+      allow_update: editEnabled,
     }
 
     if (canRateSession(session)) {
@@ -447,6 +503,7 @@ const saveStudentEvaluation = async (session, student) => {
     )
 
     await fetchSessionDetailsForSessions()
+    evaluationEditEnabled.value = { ...evaluationEditEnabled.value, [saveKey]: false }
     alert('Előrehaladás mentve.')
   } catch (err) {
     alert('Hiba történt az előrehaladás mentésekor.')
@@ -586,6 +643,16 @@ onMounted(() => {
             >
               <h5>{{ student.student_name }}</h5>
 
+              <div
+                v-if="hasExistingEvaluation(session.id, student.student_id) && !canEditExistingEvaluation(session.id, student.student_id)"
+                class="evaluation-locked"
+              >
+                <p class="locked-note">A tanuló értékelése már mentve van.</p>
+                <button class="btn btn-secondary" @click="enableEvaluationEdit(session.id, student.student_id)">
+                  Értékelés változtatása
+                </button>
+              </div>
+
               <div v-if="evaluationForms[session.id]?.[student.student_id]" class="evaluation-fields">
                 <div class="field-group">
                   <label :for="`rating-${session.id}-${student.student_id}`">Értékelés (1–5)</label>
@@ -593,6 +660,7 @@ onMounted(() => {
                     :id="`rating-${session.id}-${student.student_id}`"
                     v-model="evaluationForms[session.id][student.student_id].rating"
                     class="input"
+                    :disabled="hasExistingEvaluation(session.id, student.student_id) && !canEditExistingEvaluation(session.id, student.student_id)"
                   >
                     <option value="">Nincs értékelés</option>
                     <option value="1">1</option>
@@ -611,16 +679,26 @@ onMounted(() => {
                     class="input notes-input"
                     rows="3"
                     placeholder="Mit gyakoroltatok, miben fejlődött a tanuló?"
+                    :disabled="hasExistingEvaluation(session.id, student.student_id) && !canEditExistingEvaluation(session.id, student.student_id)"
                   />
                 </div>
 
-                <button
-                  class="btn btn-primary btn-save"
-                  :disabled="evaluationSaving[`${session.id}:${student.student_id}`]"
-                  @click="saveStudentEvaluation(session, student)"
-                >
-                  {{ evaluationSaving[`${session.id}:${student.student_id}`] ? 'Mentés...' : 'Értékelés mentése' }}
-                </button>
+                <div class="evaluation-actions">
+                  <button
+                    class="btn btn-primary btn-save"
+                    :disabled="evaluationSaving[`${session.id}:${student.student_id}`] || (hasExistingEvaluation(session.id, student.student_id) && !canEditExistingEvaluation(session.id, student.student_id))"
+                    @click="saveStudentEvaluation(session, student)"
+                  >
+                    {{ evaluationSaving[`${session.id}:${student.student_id}`] ? 'Mentés...' : (hasExistingEvaluation(session.id, student.student_id) ? 'Értékelés frissítése' : 'Értékelés mentése') }}
+                  </button>
+                  <button
+                    v-if="hasExistingEvaluation(session.id, student.student_id) && canEditExistingEvaluation(session.id, student.student_id)"
+                    class="btn btn-ghost"
+                    @click="cancelEvaluationEdit(session.id, student.student_id)"
+                  >
+                    Mégse
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -750,6 +828,30 @@ h2 { color: #f1f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-
   margin-top: 4px;
 }
 
+.evaluation-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.evaluation-locked {
+  margin-bottom: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.locked-note {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.88rem;
+}
+
 /* Time editor */
 .time-editor {
   margin-top: 12px;
@@ -774,7 +876,9 @@ h2 { color: #f1f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-
 .btn:hover { opacity: 0.85; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary { background: #4f46e5; color: white; }
+.btn-secondary { background: #0ea5e9; color: white; }
 .btn-success { background: #22c55e; color: white; }
 .btn-warning { background: #f59e0b; color: white; }
 .btn-danger { background: #ef4444; color: white; }
+.btn-ghost { background: transparent; color: #cbd5e1; border: 1px solid rgba(203, 213, 225, 0.35); }
 </style>
