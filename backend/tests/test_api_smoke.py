@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 os.environ.setdefault("NYELVCSERE_SECRET_KEY", "test-secret-key")
 
@@ -78,12 +79,13 @@ def test_student_cannot_access_pairing_suggestions() -> None:
 
 def test_student_users_endpoint_excludes_self_and_mentors() -> None:
     token = _login_token("peter.student@example.com", "demo123")
+    peer_email = f"peer.student.{uuid4().hex}@example.com"
 
     register_response = client.post(
         "/register",
         json={
             "name": "Test Student Peer",
-            "email": "peer.student@example.com",
+            "email": peer_email,
             "password": "demo123",
             "role": "student",
         },
@@ -98,7 +100,7 @@ def test_student_users_endpoint_excludes_self_and_mentors() -> None:
     assert response.status_code == 200
     payload = response.json()
     emails = {user["email"] for user in payload}
-    assert "peer.student@example.com" in emails
+    assert peer_email in emails
     assert "peter.student@example.com" not in emails
     assert "anna.mentor@example.com" not in emails
 
