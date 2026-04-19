@@ -8,7 +8,7 @@ A Nyelvcsere Közösség egy teljes webes platform, amely nyelvmentorok, nyelvta
 
 ## 2. Állapot
 
-Last updated: April 14, 2026
+Last updated: April 19, 2026
 
 Fő funkciók:
 - JWT alapú autentikáció és jogosultságkezelés (`student`, `mentor`)
