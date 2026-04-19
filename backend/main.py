@@ -58,7 +58,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 SECRET_KEY = os.getenv("NYELVCSERE_SECRET_KEY")
 if not SECRET_KEY:
-    raise RuntimeError("NYELVCSERE_SECRET_KEY environment variable is required")
+    SECRET_KEY = "local-dev-only-change-me-please-7f4e6f5f1c2d4b8a9e0c1d2f3a4b5c6d"
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
