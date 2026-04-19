@@ -453,7 +453,6 @@ onMounted(() => {
   padding: 40px;
 }
 
-/* Main card */
 .profile-card {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -462,7 +461,6 @@ onMounted(() => {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-/* Card header with avatar */
 .card-header {
   display: flex;
   flex-direction: column;
@@ -512,7 +510,6 @@ onMounted(() => {
 .role-badge.mentor { background: rgba(99, 102, 241, 0.25); color: #818cf8; }
 .role-badge.student { background: rgba(34, 197, 94, 0.25); color: #86efac; }
 
-/* Form sections */
 .profile-form {
   display: flex;
   flex-direction: column;
@@ -590,7 +587,6 @@ textarea.input {
   font-size: 0.88rem;
 }
 
-/* Progress section */
 .progress-section {
   margin-top: 28px;
   padding-top: 22px;

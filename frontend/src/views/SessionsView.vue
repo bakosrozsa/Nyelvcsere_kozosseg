@@ -13,7 +13,6 @@ const participantsBySession = ref({})
 const evaluationsBySession = ref({})
 const evaluationForms = ref({})
 const evaluationSaving = ref({})
-// Tracks which student evaluations are currently in edit mode.
 const evaluationEditEnabled = ref({})
 const myEvaluationBySession = ref({})
 const sessionTimeForms = ref({})
@@ -761,7 +760,6 @@ h2 { color: #f1f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-
 .session-info { width: 100%; }
 .session-info p { margin: 5px 0; color: #cbd5e1; }
 
-/* Progress / evaluation editor */
 .progress-editor {
   margin-top: 12px;
   padding: 14px 16px;
@@ -775,7 +773,6 @@ h2 { color: #f1f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-
   font-size: 0.95rem;
 }
 
-/* Individual student evaluation card */
 .student-evaluation-card {
   border: 1px solid rgba(99, 102, 241, 0.25);
   border-radius: 8px;
@@ -792,7 +789,6 @@ h2 { color: #f1f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-
   padding-bottom: 8px;
 }
 
-/* Stacked fields layout */
 .evaluation-fields {
   display: flex;
   flex-direction: column;
@@ -852,7 +848,6 @@ h2 { color: #f1f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-
   font-size: 0.88rem;
 }
 
-/* Time editor */
 .time-editor {
   margin-top: 12px;
   padding: 14px 16px;

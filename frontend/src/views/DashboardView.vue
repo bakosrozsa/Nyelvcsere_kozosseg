@@ -107,7 +107,6 @@ onMounted(fetchDashboard)
 <template>
   <div class="dashboard">
     <div class="dashboard-header">
-      <!-- Left spacer mirrors right side for true centering -->
       <div class="header-spacer"></div>
 
       <div class="header-center">
@@ -189,7 +188,6 @@ onMounted(fetchDashboard)
   padding: 20px;
 }
 
-/* ── 3-column grid trick: spacer | center | actions ── */
 .dashboard-header {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

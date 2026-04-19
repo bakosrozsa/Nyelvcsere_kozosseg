@@ -294,7 +294,6 @@ h1 {
   background: rgba(255, 255, 255, 0.09);
 }
 
-/* Style native select options (best effort — OS dependent) */
 .input option {
   background: #1e2130;
   color: #f1f5f9;

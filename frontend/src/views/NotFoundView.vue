@@ -4,7 +4,7 @@
 <template>
   <div class="not-found">
     <h2>404 - Nem Található</h2>
-    <p>Sajnos az oldal, amelyet keresed, nem létezik.</p>
+    <p>Sajnos az oldal, amelyet keresel, nem létezik.</p>
     <router-link to="/">Vissza a kezdőoldalra</router-link>
   </div>
 </template>
