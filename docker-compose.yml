@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: nyelvcsere-backend
+    environment:
+      NYELVCSERE_SECRET_KEY: ${NYELVCSERE_SECRET_KEY:-local-dev-only-change-me-please-7f4e6f5f1c2d4b8a9e0c1d2f3a4b5c6d}
+      NYELVCSERE_DB_PATH: /data/nyelvcsere.db
+    command: sh -c "python init_db.py && uvicorn main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - nyelvcsere_data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: nyelvcsere-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+volumes:
+  nyelvcsere_data:

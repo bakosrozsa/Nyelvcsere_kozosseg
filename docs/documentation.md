@@ -263,6 +263,45 @@ cd frontend
 npm run test
 ```
 
+### 8.7 Konténeres futtatás (Docker Compose)
+
+Előfeltétel: telepített Docker Desktop (Compose támogatással).
+
+Projekt gyökeréből indítás:
+
+```bash
+docker compose up --build
+```
+
+Elérhető URL-ek:
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+- Backend OpenAPI: `http://localhost:8000/docs`
+
+Háttérben indítás:
+
+```bash
+docker compose up --build -d
+```
+
+Logok megtekintése:
+
+```bash
+docker compose logs -f
+```
+
+Leállítás:
+
+```bash
+docker compose down
+```
+
+Adatok teljes törlése (SQLite volume reset):
+
+```bash
+docker compose down -v
+```
+
 ---
 
 ## 9. API összefoglaló
@@ -329,4 +368,4 @@ Megjegyzés az értékeléshez: egy mentor alapértelmezetten csak egyszer menth
 
 ## 12. Megjegyzés
 
-`init_db.py` futtatása újraépíti a demó adatbázist. Ha teljes reset kell, töröld a `backend/nyelvcsere.db` fájlt és futtasd újra az initet.
+Lokális (nem Docker) futtatásnál `init_db.py` újraépíti a demó adatbázist. Ha teljes reset kell, töröld a `backend/nyelvcsere.db` fájlt és futtasd újra az initet. Docker futtatásnál ugyanez a `docker compose down -v` paranccsal érhető el.
