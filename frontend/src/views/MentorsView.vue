@@ -47,6 +47,15 @@ const formatMinBookingTime = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
+const toApiDateTime = (dateTimeLocalValue) => {
+  if (!dateTimeLocalValue) {
+    return ''
+  }
+
+  // Keep local wall-clock time from datetime-local input and avoid UTC shift.
+  return dateTimeLocalValue.length === 16 ? `${dateTimeLocalValue}:00` : dateTimeLocalValue
+}
+
 const availableLanguages = computed(() => {
   const values = mentors.value.map((m) => m.teachesLanguage).filter(Boolean)
   return [...new Set(values)].sort((a, b) => a.localeCompare(b))
@@ -222,7 +231,7 @@ const handleBooking = async (mentor) => {
       },
       body: JSON.stringify({
         mentor_profile_id: mentor.id,
-        scheduled_time: new Date(bookingDateTime.value).toISOString(),
+        scheduled_time: toApiDateTime(bookingDateTime.value),
       }),
     })
 

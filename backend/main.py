@@ -1288,19 +1288,24 @@ def update_session(session_id: int, payload: SessionUpdate, db: Session = Depend
     else:
         raise HTTPException(status_code=400, detail="No changes provided")
 
-    if payload.status is not None and db_session.status != "scheduled":
-        raise HTTPException(status_code=400, detail="Session status can only be changed while the session is scheduled")
+    if payload.status is not None:
+        # Prevent changing session time when also updating status
+        if payload.scheduled_time is not None:
+            raise HTTPException(status_code=400, detail="Session time cannot be changed together with a status update")
+        # Allow transitioning from scheduled to any status (including completed)
+        if db_session.status == "scheduled":
+            db_session.status = payload.status
+        # Allow transitioning to completed from any other status
+        elif payload.status == "completed":
+            db_session.status = payload.status
+        else:
+            raise HTTPException(status_code=400, detail="Invalid session status transition")
 
     if payload.scheduled_time is not None and db_session.status != "scheduled":
         raise HTTPException(status_code=400, detail="Session time can only be changed while the session is scheduled")
-
-    if payload.scheduled_time is not None and payload.status is not None:
-        raise HTTPException(status_code=400, detail="Session time cannot be changed together with a status update")
     
     if payload.scheduled_time:
         db_session.scheduled_time = payload.scheduled_time
-    if payload.status:
-        db_session.status = payload.status
         
     db.commit()
     db.refresh(db_session)

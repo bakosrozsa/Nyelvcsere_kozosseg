@@ -79,6 +79,15 @@ const toDateTimeLocalValue = (value) => {
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
+const toApiDateTime = (dateTimeLocalValue) => {
+  if (!dateTimeLocalValue) {
+    return ''
+  }
+
+  // Keep local wall-clock time from datetime-local input and avoid UTC shift.
+  return dateTimeLocalValue.length === 16 ? `${dateTimeLocalValue}:00` : dateTimeLocalValue
+}
+
 const getHeaders = () => {
   const token = localStorage.getItem('token')
   return { Authorization: `Bearer ${token}` }
@@ -225,6 +234,7 @@ const fetchSessionDetailsForSessions = async () => {
 }
 
 const canRateSession = (session) => session?.status === 'completed'
+const canWriteNotes = (session) => session?.status === 'completed'
 const canShowFeedbackSummary = (session) => isMentor.value || session?.status !== 'canceled'
 /**
  * Generates a unique key used to track evaluation edit state for a
@@ -273,6 +283,18 @@ const cancelEvaluationEdit = (sessionId, studentId) => {
 }
 
 const participantsCount = (sessionId) => participantsBySession.value[sessionId]?.length || 0
+const getEvaluationForm = (sessionId, studentId) => {
+  if (!evaluationForms.value[sessionId]) {
+    evaluationForms.value[sessionId] = {}
+  }
+  if (!evaluationForms.value[sessionId][studentId]) {
+    evaluationForms.value[sessionId][studentId] = {
+      notes: '',
+      rating: '',
+    }
+  }
+  return evaluationForms.value[sessionId][studentId]
+}
 const canStudentDeleteSession = (session) => {
   if (currentUser.value?.role !== 'student') {
     return false
@@ -343,7 +365,7 @@ const createSession = async () => {
     const isGroup = isMentor.value
     const payload = {
       mentor_profile_id: Number(isGroup ? ownMentorProfile.value.id : newSession.value.mentor_profile_id),
-      scheduled_time: new Date(newSession.value.scheduled_time).toISOString(),
+      scheduled_time: toApiDateTime(newSession.value.scheduled_time),
       is_group: isGroup,
       max_students: isGroup ? Number(newSession.value.max_students) : null,
     }
@@ -441,7 +463,7 @@ const updateSessionTime = async (sessionId) => {
   try {
     await axios.put(
       `${API_BASE_URL}/sessions/${sessionId}`,
-      { scheduled_time: new Date(scheduledTime).toISOString() },
+      { scheduled_time: toApiDateTime(scheduledTime) },
       { headers: getHeaders() }
     )
     fetchSessions()
@@ -505,7 +527,7 @@ const saveStudentEvaluation = async (session, student) => {
     evaluationEditEnabled.value = { ...evaluationEditEnabled.value, [saveKey]: false }
     alert('Előrehaladás mentve.')
   } catch (err) {
-    alert('Hiba történt az előrehaladás mentésekor.')
+    alert(err?.response?.data?.detail || 'Hiba történt az előrehaladás mentésekor.')
     console.error(err)
   } finally {
     evaluationSaving.value = { ...evaluationSaving.value, [saveKey]: false }
@@ -652,12 +674,12 @@ onMounted(() => {
                 </button>
               </div>
 
-              <div v-if="evaluationForms[session.id]?.[student.student_id]" class="evaluation-fields">
+              <div class="evaluation-fields">
                 <div class="field-group">
                   <label :for="`rating-${session.id}-${student.student_id}`">Értékelés (1–5)</label>
                   <select
                     :id="`rating-${session.id}-${student.student_id}`"
-                    v-model="evaluationForms[session.id][student.student_id].rating"
+                    v-model="getEvaluationForm(session.id, student.student_id).rating"
                     class="input"
                     :disabled="hasExistingEvaluation(session.id, student.student_id) && !canEditExistingEvaluation(session.id, student.student_id)"
                   >
@@ -674,7 +696,7 @@ onMounted(() => {
                   <label :for="`notes-${session.id}-${student.student_id}`">Megjegyzés</label>
                   <textarea
                     :id="`notes-${session.id}-${student.student_id}`"
-                    v-model="evaluationForms[session.id][student.student_id].notes"
+                    v-model="getEvaluationForm(session.id, student.student_id).notes"
                     class="input notes-input"
                     rows="3"
                     placeholder="Mit gyakoroltatok, miben fejlődött a tanuló?"
