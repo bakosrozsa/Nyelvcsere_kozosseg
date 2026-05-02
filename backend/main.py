@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 from typing import List, Literal, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,6 +66,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 MAX_BCRYPT_PASSWORD_BYTES = 72
 ROLE_GUEST = "guest"
 ALLOWED_REGISTER_ROLES = {role.value for role in UserRole}
+APP_TIMEZONE = ZoneInfo(os.getenv("NYELVCSERE_TIMEZONE", "Europe/Budapest"))
 
 
 class UserOut(BaseModel):
@@ -358,6 +360,17 @@ def get_session_student_ids(session: StudySession, db: Session) -> list[int]:
     return list(student_ids)
 
 
+def normalize_to_local_naive_datetime(value: datetime) -> datetime:
+    """
+    Normalize timestamps to local wall-clock naive datetimes for SQLite storage.
+    - Naive input is treated as already-local and kept as-is.
+    - TZ-aware input is converted to configured app timezone then made naive.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(APP_TIMEZONE).replace(tzinfo=None)
+
+
 def build_pairing_suggestions(db: Session) -> List[PairingSuggestionOut]:
     users = db.query(User).all()
     profiles = db.query(MentorProfile).all()
@@ -497,6 +510,28 @@ def ensure_session_schema() -> None:
                 connection.execute(text(statement))
 
 
+def ensure_session_evaluations_schema() -> None:
+    inspector = inspect(engine)
+    if "session_evaluations" in inspector.get_table_names():
+        return
+
+    create_statement = """
+    CREATE TABLE session_evaluations (
+        id INTEGER PRIMARY KEY,
+        session_id INTEGER NOT NULL,
+        student_id INTEGER NOT NULL,
+        notes TEXT,
+        rating INTEGER,
+        CONSTRAINT uq_session_student_evaluation UNIQUE (session_id, student_id),
+        FOREIGN KEY(session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+        FOREIGN KEY(student_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+    """
+
+    with engine.begin() as connection:
+        connection.execute(text(create_statement))
+
+
 def sync_mentor_learning_goals(db: Session) -> None:
     mentors = db.query(User).filter(User.role == "mentor").all()
     changed = False
@@ -517,6 +552,7 @@ def sync_mentor_learning_goals(db: Session) -> None:
 ensure_mentor_profile_schema()
 ensure_user_schema()
 ensure_session_schema()
+ensure_session_evaluations_schema()
 
 
 with Session(engine) as bootstrap_db:
@@ -1170,11 +1206,8 @@ def upsert_session_evaluation(
         )
         db.add(evaluation)
     else:
-        if not payload.allow_update:
-            raise HTTPException(
-                status_code=400,
-                detail="Evaluation already exists. Use allow_update=True to modify it",
-            )
+        # Keep this endpoint as true upsert to avoid client-side race conditions
+        # when an evaluation already exists.
         evaluation.notes = payload.notes
         evaluation.rating = payload.rating
 
@@ -1228,6 +1261,8 @@ def upsert_session_progress_log(
 
 @app.post("/sessions", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
 def create_session(payload: SessionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> StudySession:
+    payload_scheduled_time = normalize_to_local_naive_datetime(payload.scheduled_time)
+
     mentor_profile = db.query(MentorProfile).filter(MentorProfile.id == payload.mentor_profile_id).first()
     if mentor_profile is None:
         raise HTTPException(status_code=404, detail="Mentor profile not found")
@@ -1249,7 +1284,7 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db), curren
         db.query(StudySession)
         .filter(
             StudySession.mentor_profile_id == payload.mentor_profile_id,
-            StudySession.scheduled_time == payload.scheduled_time,
+            StudySession.scheduled_time == payload_scheduled_time,
             StudySession.status == "scheduled",
         )
         .first()
@@ -1260,7 +1295,7 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db), curren
     new_session = StudySession(
         student_id=(current_user.id if not payload.is_group else None),
         mentor_profile_id=payload.mentor_profile_id,
-        scheduled_time=payload.scheduled_time,
+        scheduled_time=payload_scheduled_time,
         status="scheduled",
         is_group=payload.is_group,
         max_students=(payload.max_students if payload.is_group else None),
@@ -1301,11 +1336,15 @@ def update_session(session_id: int, payload: SessionUpdate, db: Session = Depend
         else:
             raise HTTPException(status_code=400, detail="Invalid session status transition")
 
-    if payload.scheduled_time is not None and db_session.status != "scheduled":
+    normalized_scheduled_time = None
+    if payload.scheduled_time is not None:
+        normalized_scheduled_time = normalize_to_local_naive_datetime(payload.scheduled_time)
+
+    if normalized_scheduled_time is not None and db_session.status != "scheduled":
         raise HTTPException(status_code=400, detail="Session time can only be changed while the session is scheduled")
-    
-    if payload.scheduled_time:
-        db_session.scheduled_time = payload.scheduled_time
+
+    if normalized_scheduled_time is not None:
+        db_session.scheduled_time = normalized_scheduled_time
         
     db.commit()
     db.refresh(db_session)

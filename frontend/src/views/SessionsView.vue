@@ -61,22 +61,43 @@ const getCurrentDateTimeLocal = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
-const toDateTimeLocalValue = (value) => {
+const extractWallClockParts = (value) => {
   if (!value) {
+    return null
+  }
+
+  const normalizedValue = String(value).trim().replace(' ', 'T')
+  const match = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    year: match[1],
+    month: match[2],
+    day: match[3],
+    hours: match[4],
+    minutes: match[5],
+    seconds: match[6] || '00',
+  }
+}
+
+const formatSessionDateTime = (value) => {
+  const parts = extractWallClockParts(value)
+  if (!parts) {
+    return 'Nincs megadva'
+  }
+
+  return `${parts.year}. ${parts.month}. ${parts.day}. ${parts.hours}:${parts.minutes}:${parts.seconds}`
+}
+
+const toDateTimeLocalValue = (value) => {
+  const parts = extractWallClockParts(value)
+  if (!parts) {
     return ''
   }
 
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hours}:${minutes}`
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hours}:${parts.minutes}`
 }
 
 const toApiDateTime = (dateTimeLocalValue) => {
@@ -527,7 +548,8 @@ const saveStudentEvaluation = async (session, student) => {
     evaluationEditEnabled.value = { ...evaluationEditEnabled.value, [saveKey]: false }
     alert('Előrehaladás mentve.')
   } catch (err) {
-    alert(err?.response?.data?.detail || 'Hiba történt az előrehaladás mentésekor.')
+    const apiMessage = err?.response?.data?.detail || err?.response?.data?.message || err?.message
+    alert(apiMessage || 'Hiba történt az előrehaladás mentésekor.')
     console.error(err)
   } finally {
     evaluationSaving.value = { ...evaluationSaving.value, [saveKey]: false }
@@ -589,7 +611,7 @@ onMounted(() => {
       <div v-else class="group-list">
         <article v-for="group in availableGroupSessions" :key="group.id" class="group-item">
           <p><strong>Mentor:</strong> {{ mentorByProfileId.get(String(group.mentor_profile_id))?.name || `Profil ID: ${group.mentor_profile_id}` }}</p>
-          <p><strong>Időpont:</strong> {{ new Date(group.scheduled_time).toLocaleString('hu-HU') }}</p>
+          <p><strong>Időpont:</strong> {{ formatSessionDateTime(group.scheduled_time) }}</p>
           <p><strong>Limit:</strong> {{ group.participants_count }}/{{ group.max_students }}</p>
           <button class="btn btn-primary" :disabled="joiningGroup[group.id]" @click="joinGroupSession(group.id)">
             {{ joiningGroup[group.id] ? 'Jelentkezés...' : 'Jelentkezem' }}
@@ -610,7 +632,7 @@ onMounted(() => {
             <strong>Mentor:</strong>
             {{ mentorByProfileId.get(String(session.mentor_profile_id))?.name || `Profil ID: ${session.mentor_profile_id}` }}
           </p>
-          <p><strong>Időpont:</strong> {{ new Date(session.scheduled_time).toLocaleString('hu-HU') }}</p>
+          <p><strong>Időpont:</strong> {{ formatSessionDateTime(session.scheduled_time) }}</p>
           <p>
             <strong>Státusz:</strong>
             <span :class="['status-badge', session.status]">{{ session.status }}</span>
