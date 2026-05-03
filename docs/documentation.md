@@ -2,26 +2,27 @@
 
 ## 1. Projekt célja
 
-A Nyelvcsere Közösség egy teljes webes platform, amely nyelvmentorok, nyelvtanulók és látogatók számára biztosít lehetőséget nyelvi cserealkalmak szervezésére, mentorprofilok böngészésére, párosítási javaslatok készítésére és a fejlődés nyomon követésére.
+A Nyelvcsere Közösség egy webes nyelvcsere-platform, amely összehozza a tanulókat és mentorokat. A rendszer támogatja a mentorprofilok böngészését, a nyelvi párosítási javaslatokat, az egyéni és csoportos foglalkozások kezelését, valamint a haladás és értékelések nyomon követését.
 
 ---
 
 ## 2. Állapot
 
-Last updated: April 19, 2026
+Last updated: May 3, 2026
 
 Fő funkciók:
-- JWT alapú autentikáció és jogosultságkezelés (`student`, `mentor`)
-- Vendég mód: mentorlista megtekinthető bejelentkezés nélkül
-- Mentor profil kezelés (tanított/tanult nyelv, időtartam, elérhetőség, cserefeltételek)
-- 1:1 és csoportos foglalkozások
-- Csoportos foglalkozás korlát: `max_students` csak 2 és 10 között
-- Csoportos csatlakozás és lejelentkezés
-- Session státuszkezelés (`scheduled`, `completed`, `canceled`)
-- Haladási napló (`rating`, `notes`) és foglalkozás utáni értékelési folyamat
-- Mentor oldali párosítási javaslatok (csak diákokra)
-- Dashboard: felhasználók, párosítások, erőforrások
-- App-szintű sötét/glassmorphism UI téma (konzisztens kártya stílusok)
+- JWT-alapú autentikáció és szerepkör-kezelés (`student`, `mentor`)
+- Vendég mód: a kezdőoldal és a mentorlista bejelentkezés nélkül is elérhető
+- Mentorprofil-kezelés tanított és tanult nyelvvel, időtartammal, elérhetőséggel és cserefeltételekkel
+- Egyéni foglalás diákoknak, csoportos foglalkozás mentoroknak
+- Csoportos foglalkozás-kapacitás: `max_students` csak 2 és 10 között lehet
+- Csoportos csatlakozás és leiratkozás diákoknak
+- Session státuszok: `scheduled`, `completed`, `canceled`
+- Haladási napló (`notes`, `rating`) és foglalkozás utáni értékelés
+- Mentor-only párosítási javaslatok és mentorcsoportok
+- Mentor-only erőforráslista és közösségi összefoglaló
+- Felhasználói dashboard, profiloldal és foglalkozáskezelés a frontendben
+- Modern, sötét, glassmorphism jellegű UI a Vue alkalmazásban
 
 ---
 
@@ -29,125 +30,128 @@ Fő funkciók:
 
 ### 3.1 Backend
 
-| Csomag | Megjegyzés |
-|--------|------------|
-| FastAPI | REST API réteg |
-| SQLAlchemy | ORM |
-| SQLite | Adatbázis (helyi/demó) |
-| python-jose | JWT hitelesítés |
-| passlib + bcrypt | Jelszókezelés |
-| Uvicorn | ASGI szerver |
+| Csomag | Verzió | Megjegyzés |
+|--------|--------|------------|
+| FastAPI | 0.136.1 | REST API réteg, OpenAPI dokumentációval |
+| Uvicorn | 0.34.0 | ASGI szerver |
+| SQLAlchemy | 2.0.39 | ORM |
+| Pydantic | 2.11.1 | Modell- és validációs réteg |
+| python-jose | 3.5.0 | JWT hitelesítés |
+| bcrypt | 4.3.0 | Jelszóhashing |
+| SQLite | beépített | Helyi és demó adatbázis |
 
 #### FastAPI
-- Automatikus OpenAPI/Swagger dokumentáció generálás, amely megkönnyíti a fejlesztést és a tesztelést.
-- Natív aszinkron támogatás (`async/await`), ami jobb teljesítményt nyújt I/O-intenzív műveleteknél.
-- Python típusannotációkon alapuló validáció (Pydantic), így a bemeneti adatok ellenőrzése kódszinten megoldott.
-- Minimális boilerplate-tel készíthető működő API, ami oktatási és demójellegű projektekhez különösen alkalmas.
+- Automatikus OpenAPI/Swagger dokumentációt ad.
+- Típusannotációkra és Pydantic modellekre épül, ezért a request/response validáció erős.
+- Egyszerűen olvasható, kevés boilerplate-tel írható API-t ad.
 
 #### SQLAlchemy
-- Rugalmas, adatbázisfüggetlen ORM: az SQLite szükség esetén könnyen cserélhető PostgreSQL-re.
-- Deklaratív modell-definíció, amely átlátható adatmodellt eredményez.
-- Alembic-kel bővíthető migráció-támogatás.
+- Átlátható ORM-megoldás, amely a schema- és query-logikát külön kezeli.
+- A jelenlegi SQLite háttér később könnyen cserélhető más relációs adatbázisra.
 
 #### SQLite
-- Telepítés nélkül, egyetlen fájlként futtatható, ami helyi fejlesztéshez és demóadatokhoz ideális.
-- **Fontos korlát:** SQLite nem alkalmas éles, nagy terhelésű, többfelhasználós környezetbe. Párhuzamos írási műveleteknél zárolási problémák léphetnek fel. Éles rendszernél PostgreSQL-re való csere javasolt, de ez túlhaladja a beadandót.
+- Egyszerű, fájlalapú tárolás a helyi fejlesztéshez és a seedelt demóhoz.
+- Többfelhasználós, nagy terhelésű éles környezetben nem ideális, ezért a dokumentáció és a kód is lokális/demó használatra van optimalizálva.
 
 #### JWT + bcrypt
-- A JWT (JSON Web Token) állapotmentes hitelesítést tesz lehetővé: a szerver nem tárol munkamenet-adatot, a token maga tartalmazza a szükséges információkat. A tokenek lejárati idővel rendelkeznek.
-- A bcrypt iparági szabványnak megfelelő jelszóhashing algoritmust biztosít: sózott, lassított hash, amely ellenáll brute-force támadásoknak.
-
----
+- A JWT állapotmentes hitelesítést biztosít.
+- A bcrypt lassított hash-t használ, így a jelszavak nem nyers formában kerülnek tárolásra.
 
 ### 3.2 Frontend
 
-| Csomag | Megjegyzés |
-|--------|------------|
-| Vue 3 (Composition API) | UI keretrendszer |
-| Vue Router | Oldalnavigáció |
-| Vite | Fejlesztői szerver és build |
-| Axios | HTTP kliens |
-| CSS (custom dark theme) | Glassmorphism UI téma |
-| Vitest | Frontend tesztek |
+| Csomag | Verzió | Megjegyzés |
+|--------|--------|------------|
+| Vue | 3.5.30 | UI keretrendszer |
+| Vue Router | 5.0.4 | Oldalnavigáció |
+| Vite | 8.0.3 | Dev server és build |
+| Axios | 1.13.6 | HTTP kliens |
+| Vitest | 4.1.2 | Frontend tesztek |
 
 #### Vue 3
-- Komponens-alapú architektúra, amely modulárissá és újrafelhasználhatóvá teszi a kódot.
-- A Composition API tisztább, típusbarát kódszervezést tesz lehetővé az Options API-val szemben.
+- Komponens-alapú struktúra, jól elkülönített nézetekkel.
+- A Composition API jól illeszkedik a kisebb, önálló funkciókra bontott oldalstruktúrához.
 
 #### Vite
-- Natív ES modulokat használó, rendkívül gyors fejlesztői szerver Hot Module Replacement (HMR) támogatással.
+- Gyors fejlesztői környezet és build folyamat.
 
 #### Axios
-- Promise-alapú HTTP kliens; interceptorok segítségével a JWT token automatikusan csatolható minden kéréshez.
-
----
+- A foglalkozás- és felhasználói lekérésekhez használt HTTP kliens a frontendben.
 
 ### 3.3 Fejlesztői eszközök
 
-- **pytest** – Python ökoszisztéma de facto standard tesztelési keretrendszere; jól integrálható a FastAPI `TestClient`-tel.
-- **GitHub Actions CI** – Minden push és pull request esetén automatikusan futtatja a backend és frontend teszteket.
-- **npm audit** – Automatikus függőség-biztonsági ellenőrzés a frontend csomagokra.
+- pytest – backend smoke tesztekhez.
+- GitHub Actions CI – a backend teszteket, a frontend teszteket és a buildet automatikusan futtatja.
+- npm audit – a frontend függőségek biztonsági ellenőrzéséhez.
 
 ---
 
 ## 4. Funkcionális követelmények teljesülése
 
 ### 4.1 Hitelesítés és regisztráció
-- Felhasználói regisztráció e-mail és jelszó alapján megvalósítva.
-- Bejelentkezés JWT token kiadásával; a token a védett végpontokhoz szükséges.
-- Minden CRUD műveletet autentikációhoz kötöttük: autentikáció nélküli kérések 401-es hibával visszautasítottak.
+- Regisztráció e-mail, jelszó és szerepkör alapján működik.
+- Bejelentkezéskor JWT token keletkezik.
+- A védett API-végpontok token nélkül 401 választ adnak.
+- A frontend a token alapján kezeli a menüpontok és oldalak láthatóságát.
 
-### 4.2 CRUD műveletek
-- **Felhasználók:** létrehozás, lekérdezés, módosítás, törlés.
-- **Mentorprofilok:** létrehozás, szerkesztés, törlés; nyilvános lekérdezés látogatók számára is elérhető.
-- **Foglalkozások:** létrehozás, módosítás, törlés, résztvevők kezelése.
-- **Haladási napló:** bejegyzések hozzáadása és lekérdezése.
-- **Értékelések:** foglalkozás utáni értékelések létrehozása és megtekintése.
+### 4.2 Felhasználó- és profilkezelés
+- A felhasználók saját adataikat módosíthatják a `users/me` végponton.
+- A mentoroknak automatikusan létrejön mentorprofil, és azt a `mentor-profile/me` végponttal módosíthatják.
+- A mentoroknak külön nyilvános listájuk van, amely vendégként is böngészhető.
 
-### 4.3 Session-kezelés
-- Egyéni (1:1) és csoportos foglalkozások támogatottak (`max_students`: 2–10).
-- Felhasználók csatlakozhatnak meglévő foglalkozáshoz, illetve le is iratkozhatnak róla.
-- Foglalkozások státusza nyomon követhető: `scheduled`, `completed`, `canceled`.
+### 4.3 Párosítás és közösségi funkciók
+- A rendszer mentorok számára párosítási javaslatokat generál a nyelvi célok alapján.
+- A mentorok mentorcsoportokat is látnak, amelyek azonos mentorhoz tartozó találatokat gyűjtik össze.
+- A mentorok számára elérhetők erőforrások és közösségi összefoglalók.
 
-### 4.4 Szerepkörök
+### 4.4 Foglalkozások és session-kezelés
+- A diákok egyéni foglalkozást hozhatnak létre.
+- A mentorok csoportos foglalkozást hozhatnak létre a saját profiljukhoz.
+- A diákok csoportos foglalkozásokhoz csatlakozhatnak és onnan leiratkozhatnak.
+- A mentorok módosíthatják a foglalkozás státuszát, illetve a még `scheduled` állapotú időpontot.
+- Az értékelések és a haladási naplók csak befejezett foglalkozásokhoz írhatók, és a meglévő bejegyzések módosítása külön engedélyt kér (`allow_update=true`).
+
+### 4.5 Szerepkörök
 
 | Szerepkör | Leírás |
 |-----------|--------|
-| Mentor | Foglalkozásokat hirdet, profilt kezel, értékeléseket kap, párosítási javaslatokat lát |
-| Tanuló | Foglalkozásokra jelentkezik, haladást naplóz, értékel |
-| Látogató | Mentorprofilokat és nyilvános foglalkozásokat böngész regisztráció nélkül |
+| Mentor | Mentorprofilt kezel, csoportos foglalkozást hoz létre, párosítási javaslatokat és erőforrásokat lát, valamint értékeléseket rögzít |
+| Tanuló | Egyéni foglalkozást foglal, csoportos foglalkozáshoz csatlakozik, saját haladását és értékeléseit követi |
+| Vendég | Kezdőoldalt és mentorlistát nézhet bejelentkezés nélkül |
 
-### 4.5 Demóadatok
-Az adatbázis induláskor automatikusan feltöltésre kerül:
+### 4.6 Demóadatok
+Az adatbázis induláskor automatikusan feltöltődik a következőkkel:
 - Nyelvek: English, Hungarian, German
-- Felhasználók: `anna.mentor@example.com` (mentor), `peter.student@example.com` (tanuló)
-- Minta mentorprofil (tanított: English, tanult: Hungarian, 60 perc), foglalkozás (`scheduled`) és progress log bejegyzés
+- Felhasználók: `anna.mentor@example.com` (mentor) és `peter.student@example.com` (tanuló)
+- Minta mentorprofil: English tanítása, Hungarian tanulása, 60 perces foglalkozás
+- Minta egyéni foglalkozás és progress log bejegyzés
 
 ---
 
 ## 5. Nem-funkcionális követelmények teljesülése
 
 ### 5.1 Biztonság
-- Jelszavak bcrypt-tel hashelve tárolódnak; plain-text jelszó soha nem kerül adatbázisba.
-- JWT tokenek lejárati idővel rendelkeznek, csökkentve a kompromittált token kockázatát.
-- Védett végpontok autentikáció nélkül nem érhetők el.
-- Frontend függőségek biztonsági auditja automatizált (`npm audit`).
+- A jelszavak bcrypt-tel hashelve tárolódnak.
+- A tokenek lejárati idővel rendelkeznek.
+- A szerepkör-alapú végpontvédelem a backendben van kikényszerítve.
+- A frontend dependency-audit a CI részét is képezi.
 
 ### 5.2 Architektúra és integráció
-- A backend tiszta REST API-t biztosít; a frontend kizárólag HTTP kéréseken keresztül kommunikál a szerverrel – a rétegek egymástól függetlenek.
-- A rendszer bármilyen operációs rendszeren futtatható helyileg, külső infrastruktúra nélkül.
+- A backend tiszta REST API-t ad, a frontend pedig HTTP kérésekkel kapcsolódik hozzá.
+- A backend és frontend külön könyvtárban van, külön build- és futtatási lépésekkel.
+- A rendszer lokálisan Docker Compose-zal is futtatható.
 
 ### 5.3 Tesztelhetőség és CI/CD
-- Backend pytest-tel tesztelve, frontend Vitest-tel.
-- GitHub Actions CI pipeline minden módosításnál automatikusan futtatja a teszteket.
+- A backend smoke tesztek pytest-tel futnak.
+- A frontend tesztek Vitest-tel futnak.
+- A GitHub Actions workflow push és pull request esetén futtatja a backend teszteket, a frontend teszteket és a frontend buildet.
 
 ### 5.4 Karbantarthatóság és konfiguráció
-- A kód modulárisan szervezett, a backend és frontend egymástól elkülönített könyvtárakban.
-- Konfigurálható környezeti változókkal (`SECRET_KEY`, adatbázis elérési út, CORS, `VITE_API_BASE_URL`).
+- A konfiguráció környezeti változókon keresztül történik, például `NYELVCSERE_SECRET_KEY`, `NYELVCSERE_TIMEZONE` és `VITE_API_BASE_URL`.
+- A seedelés külön `init_db.py` fájlban van kezelve.
 
 ### 5.5 Teljesítmény
-- A FastAPI aszinkron kezelése alacsony látogatottságú, oktatási jellegű projekthez megfelelő teljesítményt nyújt.
-- Magasabb terhelés esetén az SQLite lecserélése PostgreSQL-re javasolt.
+- A jelenlegi implementáció oktatási és demó célra van optimalizálva.
+- Nagyobb terhelésre PostgreSQL-alapú háttértár lenne célszerű.
 
 ---
 
@@ -155,33 +159,39 @@ Az adatbázis induláskor automatikusan feltöltésre kerül:
 
 ```text
 Nyelvcsere_kozosseg/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── backend/
 │   ├── database.py
 │   ├── init_db.py
 │   ├── main.py
-│   └── models.py
+│   ├── models.py
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   └── tests/
+│       └── test_api_smoke.py
 ├── docs/
 │   └── documentation.md
 ├── frontend/
 │   ├── package.json
+│   ├── package-lock.json
 │   ├── vite.config.js
 │   ├── index.html
 │   └── src/
 │       ├── App.vue
 │       ├── main.js
 │       ├── style.css
-│       ├── router/index.js
+│       ├── config/
+│       ├── router/
+│       ├── utils/
 │       └── views/
-│           ├── HomeView.vue
-│           ├── LoginView.vue
-│           ├── RegisterView.vue
-│           ├── DashboardView.vue
-│           ├── MentorsView.vue
-│           ├── SessionsView.vue
-│           ├── ProfileView.vue
-│           └── NotFoundView.vue
-├── prompts/
-└── README.md
+└── prompts/
+	├── ai_documentation.md
+	└── Chats/
+		├── chat.json
+		├── chat2.json
+		└── chat3.json
 ```
 
 ---
@@ -190,13 +200,13 @@ Nyelvcsere_kozosseg/
 
 | Entitás | Leírás |
 |---------|--------|
-| `users` | Regisztrált felhasználók (mentor, tanuló, látogató) |
+| `users` | Regisztrált felhasználók mentor vagy tanuló szerepkörrel |
 | `languages` | Elérhető nyelvek |
-| `mentor_profiles` | Mentorok profilja, tanított/tanult nyelvek, elérhetőség |
-| `sessions` | Szervezett foglalkozások (időpont, típus, státusz) |
-| `session_participants` | Foglalkozás–felhasználó kapcsolótábla |
-| `progress_logs` | Tanulók haladási naplóbejegyzései (`rating`, `notes`) |
-| `session_evaluations` | Foglalkozások utáni értékelések |
+| `mentor_profiles` | Mentorok profiladatai, nyelvpárok és elérhetőség |
+| `sessions` | Egyéni vagy csoportos foglalkozások |
+| `session_participants` | Csoportos foglalkozások résztvevői |
+| `progress_logs` | Haladási naplóbejegyzések |
+| `session_evaluations` | Mentorértékelések foglalkozásonként és tanulónként |
 
 ---
 
@@ -214,13 +224,13 @@ python init_db.py
 uvicorn main:app --reload
 ```
 
-Tipp: a `backend/.env.example` fájl mintát ad a szükséges környezeti változókhoz.
+Tipp: a `backend/.env.example` fájl a szükséges környezeti változók mintáját tartalmazza.
 
 Backend URL: `http://127.0.0.1:8000`
 
 ### 8.2 Frontend előfeltételek
-- Node.js 20.19+ (vagy 22.12+)
-- Futó backend API (alapértelmezés: `http://127.0.0.1:8000`)
+- Node.js 20.19+ vagy 22.12+
+- Futó backend API `http://127.0.0.1:8000` címen
 
 ### 8.3 Frontend környezeti változók
 
@@ -265,7 +275,7 @@ npm run test
 
 ### 8.7 Konténeres futtatás (Docker Compose)
 
-Előfeltétel: telepített Docker Desktop (Compose támogatással).
+Előfeltétel: telepített Docker Desktop Compose támogatással.
 
 Projekt gyökeréből indítás:
 
@@ -296,7 +306,7 @@ Leállítás:
 docker compose down
 ```
 
-Adatok teljes törlése (SQLite volume reset):
+Adatok teljes törlése:
 
 ```bash
 docker compose down -v
@@ -306,23 +316,27 @@ docker compose down -v
 
 ## 9. API összefoglaló
 
+### Általános
+- `GET /` – backend állapotüzenet
+- `GET /health` – egészségellenőrzés
+
 ### Auth és felhasználók
 - `POST /register`
 - `POST /login`
 - `GET /token-check`
-- `GET /users` (mentor: teljes lista; student: csak a többi tanuló, saját magát és mentorokat nem tartalmazza)
+- `GET /users` – mentor: teljes lista, student: csak más tanulók
 - `GET /users/me`
 - `PUT /users/me`
 - `GET /users/{user_id}`
-- `GET /public/mentor-users` (vendég módban is elérhető mentorlista)
+- `GET /public/mentor-users` – nyilvános mentorlista
 
-### Nyelvek és mentor profilok
+### Nyelvek és mentorprofilok
 - `GET /languages`
 - `GET /mentor-profiles`
 - `GET /mentor-profile/me`
 - `PUT /mentor-profile/me`
 
-### Párosítás és erőforrások
+### Párosítás és mentor eszközök
 - `GET /pairing-suggestions`
 - `GET /mentor-pairing-groups`
 - `GET /mentor-resources`
@@ -342,7 +356,7 @@ docker compose down -v
 - `GET /sessions/{session_id}/evaluations`
 - `PUT /sessions/{session_id}/evaluations/{student_id}`
 
-Megjegyzés az értékeléshez: egy mentor alapértelmezetten csak egyszer menthet értékelést tanulónként adott foglalkozáshoz. Már mentett értékelés módosításához a kérésben `allow_update=true` szükséges.
+Megjegyzés: a már létező értékelések és progress logok módosításához a kérésben `allow_update=true` szükséges.
 
 ---
 
@@ -354,18 +368,19 @@ Megjegyzés az értékeléshez: egy mentor alapértelmezetten csak egyszer menth
 | `/login` | Bejelentkezés |
 | `/register` | Regisztráció |
 | `/mentors` | Mentorlista |
+| `/dashboard` | Felhasználók |
 | `/profile` | Profil |
 | `/sessions` | Foglalkozások |
-| `/dashboard` | Dashboard |
+| `/:pathMatch(.*)*` | 404 oldal |
 
 ---
 
 ## 11. Kiegészítő dokumentumok
-- AI-használat összegzése: `prompts/README.md`
-- Prompt napló: `prompts/prompt-log.md`
+- AI-használat összegzése: `prompts/ai_documentation.md`
+- Exportált chat naplók: `prompts/Chats/chat.json`, `prompts/Chats/chat2.json`, `prompts/Chats/chat3.json`
 
 ---
 
 ## 12. Megjegyzés
 
-Lokális (nem Docker) futtatásnál `init_db.py` újraépíti a demó adatbázist. Ha teljes reset kell, töröld a `backend/nyelvcsere.db` fájlt és futtasd újra az initet. Docker futtatásnál ugyanez a `docker compose down -v` paranccsal érhető el.
+Lokális, nem Dockeres futtatásnál az `init_db.py` újraépíti a demó adatbázist. Ha teljes reset kell, töröld a `backend/nyelvcsere.db` fájlt, majd futtasd újra az initet. Dockeres futtatásnál ugyanez a `docker compose down -v` paranccsal érhető el.
