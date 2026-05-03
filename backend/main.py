@@ -219,6 +219,9 @@ class ProgressLogOut(BaseModel):
 class ProgressLogUpsert(BaseModel):
     notes: Optional[str] = None
     rating: Optional[int] = None
+    # Clients must send the JSON boolean value `true` to allow updating
+    # an existing progress log, preventing accidental overwrites.
+    allow_update: bool = False
 
 
 class SessionParticipantOut(BaseModel):
@@ -1206,8 +1209,12 @@ def upsert_session_evaluation(
         )
         db.add(evaluation)
     else:
-        # Keep this endpoint as true upsert to avoid client-side race conditions
-        # when an evaluation already exists.
+        # Block updates on existing evaluations unless explicitly allowed
+        if not payload.allow_update:
+            raise HTTPException(
+                status_code=400,
+                detail="Evaluation already exists. Set allow_update to true to modify it.",
+            )
         evaluation.notes = payload.notes
         evaluation.rating = payload.rating
 
@@ -1251,6 +1258,12 @@ def upsert_session_progress_log(
         )
         db.add(progress_log)
     else:
+        # Block updates on existing progress logs unless explicitly allowed
+        if not payload.allow_update:
+            raise HTTPException(
+                status_code=400,
+                detail="Progress log already exists. Set allow_update to true to modify it.",
+            )
         progress_log.notes = payload.notes
         progress_log.rating = payload.rating
 

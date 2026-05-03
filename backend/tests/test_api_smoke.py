@@ -187,3 +187,58 @@ def test_mentor_evaluation_requires_explicit_update_flag() -> None:
     )
     assert allowed_update.status_code == 200
     assert allowed_update.json()["rating"] == 5
+
+
+def test_progress_log_requires_explicit_update_flag() -> None:
+    mentor_token = _login_token("anna.mentor@example.com", "demo123")
+    student_token = _login_token("peter.student@example.com", "demo123")
+
+    mentor_profiles_response = client.get("/mentor-profiles")
+    assert mentor_profiles_response.status_code == 200
+    mentor_profiles_payload = mentor_profiles_response.json()
+    assert mentor_profiles_payload
+    mentor_profile_id = mentor_profiles_payload[0]["id"]
+
+    create_response = client.post(
+        "/sessions",
+        headers={"Authorization": f"Bearer {student_token}"},
+        json={
+            "mentor_profile_id": mentor_profile_id,
+            "scheduled_time": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+            "is_group": False,
+            "max_students": None,
+        },
+    )
+    assert create_response.status_code == 201
+    created_session = create_response.json()
+    session_id = created_session["id"]
+
+    complete_response = client.put(
+        f"/sessions/{session_id}",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"status": "completed"},
+    )
+    assert complete_response.status_code == 200
+
+    first_save = client.put(
+        f"/sessions/{session_id}/progress-log",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"rating": 4, "notes": "Első megjeegyzés"},
+    )
+    assert first_save.status_code == 200
+
+    blocked_update = client.put(
+        f"/sessions/{session_id}/progress-log",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"rating": 5, "notes": "Második megjegyzés"},
+    )
+    assert blocked_update.status_code == 400
+    assert "allow_update" in blocked_update.json().get("detail", "")
+
+    allowed_update = client.put(
+        f"/sessions/{session_id}/progress-log",
+        headers={"Authorization": f"Bearer {mentor_token}"},
+        json={"rating": 5, "notes": "Frissített megjegyzés", "allow_update": True},
+    )
+    assert allowed_update.status_code == 200
+    assert allowed_update.json()["rating"] == 5
